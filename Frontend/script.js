@@ -57,6 +57,15 @@ const request = async (url, options = {}) => {
         return { success: false, error: errData.error || 'Session expired. Please log in again.' };
     }
     
+    if (res.status === 429) {
+        const errData = await res.json().catch(() => ({}));
+        return {
+            success: false,
+            status: 429,
+            error: errData.error || 'Too many attempts. Please try again later.'
+        };
+    }
+    
     return res.json();
 };
 
@@ -142,6 +151,24 @@ const ApiService = {
             method: 'POST',
             body: JSON.stringify({ old_password: oldPassword, new_password: newPassword })
         });
+    },
+    async forgotPassword(email) {
+        return request(`${API_BASE}/auth/forgot-password`, {
+            method: 'POST',
+            body: JSON.stringify({ email })
+        });
+    },
+    async validateOtp(email, pin) {
+        return request(`${API_BASE}/auth/validate-otp`, {
+            method: 'POST',
+            body: JSON.stringify({ email, pin })
+        });
+    },
+    async verifyReset(email, pin, newPassword) {
+        return request(`${API_BASE}/auth/reset-password`, {
+            method: 'POST',
+            body: JSON.stringify({ email, pin, new_password: newPassword })
+        });
     }
 };
 
@@ -198,7 +225,7 @@ const pageTransition = {
 // Local Activity Logging Helper
 const logActivity = (type, details) => {
     try {
-        const session = localStorage.getItem('giftai_session');
+        const session = sessionStorage.getItem('giftai_session');
         let email = 'system';
         if (session) {
             try {
@@ -519,25 +546,13 @@ function AuthPage() {
                             </div>
                         </div>
 
-                        ${isLoginMode && (isAdminLogin ? html`
-                            <div style=${{ marginTop: '0.8rem', padding: '0.6rem 0.8rem', background: 'rgba(99,102,241,0.1)', border: '1px dashed rgba(99,102,241,0.3)', borderRadius: 'var(--radius-sm)', fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <i data-lucide="info" style=${{ width: '14px', height: '14px', flexShrink: 0, color: 'var(--color-primary)' }}></i>
-                                <span>Demo Admin: <strong>admin@giftai.com</strong> / <strong>admin123</strong></span>
-                            </div>
-                        ` : html`
-                            <div style=${{ marginTop: '0.8rem', padding: '0.6rem 0.8rem', background: 'rgba(34,197,94,0.1)', border: '1px dashed rgba(34,197,94,0.3)', borderRadius: 'var(--radius-sm)', fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <i data-lucide="info" style=${{ width: '14px', height: '14px', flexShrink: 0, color: 'var(--color-success)' }}></i>
-                                <span>Demo User: <strong>reviewer@paperplane.com</strong> (password: any)</span>
-                            </div>
-                        `)}
-
                         ${isLoginMode && html`
                             <div class="auth-form-footer" style=${{ marginTop: '1rem' }}>
                                 <label style=${{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}>
                                     <input type="checkbox" checked=${rememberMe} onChange=${e => setRememberMe(e.target.checked)} />
                                     Remember Me
                                 </label>
-                                <a href="#" onClick=${() => navigate('/forgot-password')}>Forgot Password?</a>
+                                <a href="#" onClick=${(e) => { e.preventDefault(); navigate('/forgot-password'); }}>Forgot Password?</a>
                             </div>
                         `}
 
@@ -560,21 +575,49 @@ function AuthPage() {
     `;
 }
 
-// ============================================================
-// FORGOT PASSWORD WORKFLOW PAGE
-// ============================================================
 function ForgotPasswordPage() {
     const { showToast } = useContext(ToastContext);
     const navigate = useNavigate();
+    
+    // Recovery states
     const [email, setEmail] = useState('');
+    const [pin, setPin] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
-    const [step, setStep] = useState(1); // 1 = Enter Email, 2 = Enter New Password, 3 = Success
+    const [step, setStep] = useState(1); // 1 = Email, 2 = OTP, 3 = Password, 4 = Success
     const [loading, setLoading] = useState(false);
+    
+    // Dev Mode Helpers & Cooldowns
+    const [devOtp, setDevOtp] = useState(null);
+    const [countdown, setCountdown] = useState(900); // 15-minute OTP validity
+    const [resendCooldown, setResendCooldown] = useState(60); // 60s resend throttle
 
     useEffect(() => {
         if (window.lucide) window.lucide.createIcons();
-    }, [step]);
+    }, [step, devOtp]);
+
+    // Timers Effect
+    useEffect(() => {
+        let timer;
+        if (step === 2 && countdown > 0) {
+            timer = setInterval(() => setCountdown(c => c - 1), 1000);
+        }
+        return () => clearInterval(timer);
+    }, [step, countdown]);
+
+    useEffect(() => {
+        let timer;
+        if (step === 2 && resendCooldown > 0) {
+            timer = setInterval(() => setResendCooldown(c => c - 1), 1000);
+        }
+        return () => clearInterval(timer);
+    }, [step, resendCooldown]);
+
+    const formatTime = (seconds) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    };
 
     const handleVerifyEmail = async (e) => {
         e.preventDefault();
@@ -582,16 +625,23 @@ function ForgotPasswordPage() {
         setLoading(true);
 
         try {
-            const res = await ApiService.getCustomers();
-            if (res.success && res.data) {
-                const matched = res.data.find(c => c.email.toLowerCase() === email.toLowerCase().trim());
-                if (matched) {
-                    setStep(2);
+            const res = await ApiService.forgotPassword(email.trim());
+            if (res.success) {
+                showToast("Verification code generated!");
+                if (res.data && res.data.dev_otp) {
+                    setDevOtp(res.data.dev_otp);
                 } else {
-                    showToast("Email address not registered on this platform.", true);
+                    setDevOtp(null);
                 }
+                setCountdown(900); // Reset OTP validity timer (15 minutes)
+                setResendCooldown(60); // Reset resend cooldown
+                setStep(2);
             } else {
-                showToast("Failed to verify user profile. Check backend connection.", true);
+                if (res.status === 429) {
+                    showToast("Too many verification attempts. Please wait and try again.", true);
+                } else {
+                    showToast(res.error || "Email verification failed.", true);
+                }
             }
         } catch (err) {
             showToast("Connection error during verification.", true);
@@ -599,23 +649,86 @@ function ForgotPasswordPage() {
         setLoading(false);
     };
 
-    const handleResetPassword = (e) => {
+    const handleVerifyOtp = async (e) => {
+        e.preventDefault();
+        if (!pin.trim()) {
+            showToast("Verification PIN is required.", true);
+            return;
+        }
+        if (countdown <= 0) {
+            showToast("Verification code has expired. Please request a new one.", true);
+            return;
+        }
+        setLoading(true);
+
+        try {
+            const res = await ApiService.validateOtp(email.trim(), pin.trim());
+            if (res.success) {
+                showToast("Code verified successfully.");
+                setStep(3);
+            } else {
+                if (res.status === 429) {
+                    showToast("Too many verification attempts. Please wait and try again.", true);
+                } else {
+                    showToast(res.error || "Invalid verification code.", true);
+                }
+            }
+        } catch (err) {
+            showToast("Connection error during code validation.", true);
+        }
+        setLoading(false);
+    };
+
+    const handleResetPassword = async (e) => {
         e.preventDefault();
         if (!newPassword.trim() || newPassword !== confirmPassword) {
             showToast("Passwords do not match.", true);
             return;
         }
+        if (newPassword.length < 6) {
+            showToast("Password must be at least 6 characters.", true);
+            return;
+        }
         setLoading(true);
 
-        // Update password store
         try {
-            const passwords = JSON.parse(localStorage.getItem('giftai_user_passwords') || '{}');
-            passwords[email.toLowerCase().trim()] = newPassword;
-            localStorage.setItem('giftai_user_passwords', JSON.stringify(passwords));
-            setStep(3);
-            showToast("Password reset successfully!");
+            const res = await ApiService.verifyReset(email.trim(), pin.trim(), newPassword);
+            if (res.success) {
+                setStep(4);
+                showToast("Password reset successfully!");
+            } else {
+                if (res.status === 429) {
+                    showToast("Too many verification attempts. Please wait and try again.", true);
+                } else {
+                    showToast(res.error || "Password reset failed.", true);
+                }
+            }
         } catch (err) {
-            showToast("Failed to write updated password.", true);
+            showToast("Connection error during password reset.", true);
+        }
+        setLoading(false);
+    };
+
+    const handleResendOtp = async () => {
+        if (resendCooldown > 0) return;
+        setLoading(true);
+        try {
+            const res = await ApiService.forgotPassword(email.trim());
+            if (res.success) {
+                showToast("New OTP generated!");
+                if (res.data && res.data.dev_otp) {
+                    setDevOtp(res.data.dev_otp);
+                } else {
+                    setDevOtp(null);
+                }
+                setPin('');
+                setCountdown(900);
+                setResendCooldown(60);
+            } else {
+                showToast(res.error || "Resend failed.", true);
+            }
+        } catch (err) {
+            showToast("Connection error during resend.", true);
         }
         setLoading(false);
     };
@@ -660,8 +773,51 @@ function ForgotPasswordPage() {
 
                     ${step === 2 && html`
                         <div class="auth-card-header">
-                            <h2>Reset Password</h2>
-                            <p>Create a secure new password for <strong>${email}</strong></p>
+                            <h2>Enter Verification Code</h2>
+                            <p>We generated a verification code for <strong>${email}</strong></p>
+                        </div>
+                        <form onSubmit=${handleVerifyOtp}>
+                            <div class="form-group">
+                                <div style=${{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                                    <label style=${{ margin: 0 }}>Verification PIN</label>
+                                    <span style=${{ fontSize: '0.75rem', color: countdown <= 120 ? 'var(--color-danger)' : 'var(--text-muted)', fontWeight: 600 }}>
+                                        Expires in: ${formatTime(countdown)}
+                                    </span>
+                                </div>
+                                <div class="input-with-icon">
+                                    <i data-lucide="key-round"></i>
+                                    <input type="text" placeholder="123456" maxLength="6" value=${pin} onChange=${e => setPin(e.target.value.replace(/\D/g, ''))} required />
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn-primary" style=${{ width: '100%', marginTop: '1rem' }} disabled=${loading || countdown <= 0}>
+                                <span>${loading ? 'Verifying Code...' : 'Verify Code'}</span>
+                                ${loading && html`<div class="spinner"></div>`}
+                            </button>
+
+                            <div style=${{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.2rem', fontSize: '0.8rem' }}>
+                                <button type="button" class="btn-text-only" onClick=${() => setStep(1)} style=${{ padding: 0, color: 'var(--text-muted)' }}>
+                                    Back
+                                </button>
+                                <button type="button" class="btn-text-only" onClick=${handleResendOtp} disabled=${resendCooldown > 0 || loading} style=${{ padding: 0, opacity: resendCooldown > 0 ? 0.5 : 1 }}>
+                                    ${resendCooldown > 0 ? `Resend Code (${resendCooldown}s)` : 'Resend Code'}
+                                </button>
+                            </div>
+                        </form>
+
+                        ${devOtp && html`
+                            <div class="dev-otp-box" style=${{ background: 'rgba(139, 92, 246, 0.08)', border: '1px dashed rgba(139, 92, 246, 0.4)', borderRadius: 'var(--radius-sm)', padding: '1rem', marginTop: '1.5rem', textAlign: 'center' }}>
+                                <p style=${{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0 0 0.3rem 0', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.5px' }}>[Dev Mode OTP]</p>
+                                <strong style=${{ fontSize: '1.6rem', color: 'var(--color-primary)', letterSpacing: '4px', fontFamily: 'monospace' }}>${devOtp}</strong>
+                                <p style=${{ fontSize: '0.7rem', color: 'var(--text-muted)', margin: '0.3rem 0 0 0' }}>Enter this code above or check server logs</p>
+                            </div>
+                        `}
+                    `}
+
+                    ${step === 3 && html`
+                        <div class="auth-card-header">
+                            <h2>Create New Password</h2>
+                            <p>Choose a secure new password for <strong>${email}</strong></p>
                         </div>
                         <form onSubmit=${handleResetPassword}>
                             <div class="form-group">
@@ -679,12 +835,17 @@ function ForgotPasswordPage() {
                                 </div>
                             </div>
                             <button type="submit" class="btn-primary" style=${{ width: '100%', marginTop: '1rem' }} disabled=${loading}>
-                                <span>Reset Password</span>
+                                <span>${loading ? 'Resetting Password...' : 'Reset Password'}</span>
+                                ${loading && html`<div class="spinner"></div>`}
+                            </button>
+
+                            <button type="button" class="btn-text-only" onClick=${() => setStep(2)} style=${{ marginTop: '1rem', display: 'block', margin: '1rem auto 0 auto', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                                Back to Verification
                             </button>
                         </form>
                     `}
 
-                    ${step === 3 && html`
+                    ${step === 4 && html`
                         <div style=${{ textAlign: 'center', padding: '1.5rem 0' }}>
                             <div style=${{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(34, 197, 94, 0.15)', color: 'var(--color-success)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.2rem' }}>
                                 <i data-lucide="check-circle" style=${{ width: '28px', height: '28px' }}></i>
@@ -695,7 +856,7 @@ function ForgotPasswordPage() {
                         </div>
                     `}
 
-                    ${step !== 3 && html`
+                    ${step !== 4 && html`
                         <div class="auth-switch-prompt" style=${{ marginTop: '1.5rem' }}>
                             Remember password? <button onClick=${() => navigate('/login')}>Sign In</button>
                         </div>
@@ -772,9 +933,9 @@ function AppContent() {
                 }
 
                 // Sync System Admin customer record in database
-                let adminCust = custRes.data.find(c => c.email.toLowerCase() === 'admin@giftai.com');
+                let adminCust = custRes.data.find(c => c.email.toLowerCase() === currentUser.email.toLowerCase());
                 if (!adminCust) {
-                    const newAdminCust = await ApiService.createCustomer("System Admin", "admin@giftai.com");
+                    const newAdminCust = await ApiService.createCustomer(currentUser.name, currentUser.email);
                     if (newAdminCust.success) {
                         custRes.data.push(newAdminCust.data);
                         adminCust = newAdminCust.data;
@@ -1284,7 +1445,7 @@ function Navbar({ onOpenMenu }) {
                 <div class="notification-dropdown">
                     <button class="nav-icon-btn" onClick=${() => setNotifOpen(!notifOpen)} aria-label="Notifications" aria-expanded=${notifOpen}>
                         <i data-lucide="bell"></i>
-                        ${unreadCount > 0 ? html`<span class="notification-badge">${unreadCount}</span>` : null}
+                        ${unreadCount > 0 ? html`<span class="notification-badge"></span>` : null}
                     </button>
                     <div class="dropdown-panel ${notifOpen ? 'open' : ''}">
                         <div class="panel-header">
@@ -1296,8 +1457,10 @@ function Navbar({ onOpenMenu }) {
                         </div>
                         <div class="panel-list">
                             ${notifications.length === 0 ? html`
-                                <div style=${{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                                    No new notifications.
+                                <div style=${{ padding: '2.5rem 1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.6rem' }}>
+                                    <i data-lucide="check-circle" style=${{ color: 'var(--color-success)', opacity: 0.6, width: '24px', height: '24px' }}></i>
+                                    <div style=${{ fontWeight: 600, color: 'var(--text-main)' }}>All caught up!</div>
+                                    <div style=${{ fontSize: '0.8rem', opacity: 0.7 }}>No new notifications.</div>
                                 </div>
                             ` : notifications.map(n => html`
                                 <div key=${n.id} class="notification-item ${!n.read ? 'unread' : ''}">
@@ -2528,7 +2691,11 @@ function MessageRequestsPage() {
             q += `&customer_id=${currentUser.id}`;
         }
         if (filterOcc) q += `&occasion_id=${filterOcc}`;
-        if (filterStatus) q += `&status=${filterStatus}`;
+        if (filterStatus) {
+            q += `&status=${filterStatus}`;
+        } else {
+            q += `&status=generated,edited`;
+        }
 
         try {
             const res = await ApiService.getMessages(q);
@@ -2623,10 +2790,10 @@ function MessageRequestsPage() {
 
     const getStatusBadge = (status) => {
         switch(status) {
-            case 'generated': return html`<span class="badge badge-indigo">Generated</span>`;
-            case 'saved': return html`<span class="badge badge-emerald">Saved</span>`;
-            case 'edited': return html`<span class="badge badge-warning">Draft</span>`;
-            case 'linked': return html`<span class="badge" style=${{ background: 'rgba(148, 163, 184, 0.15)', color: 'var(--text-muted)' }}>Archived</span>`;
+            case 'generated': return html`<span class="badge badge-indigo">Generated Message</span>`;
+            case 'saved': return html`<span class="badge badge-emerald">Saved Template</span>`;
+            case 'edited': return html`<span class="badge badge-warning">Edited Version</span>`;
+            case 'linked': return html`<span class="badge badge-info">Linked to Order</span>`;
             default: return html`<span class="badge">${status}</span>`;
         }
     };
@@ -2654,11 +2821,9 @@ function MessageRequestsPage() {
                         ${occasions.map(o => html`<option key=${o.id} value=${o.id}>${o.name}</option>`)}
                     </select>
                     <select value=${filterStatus} onChange=${e => { setFilterStatus(e.target.value); setPage(1); }}>
-                        <option value="">All Statuses</option>
+                        <option value="">All History</option>
                         <option value="generated">Generated</option>
-                        <option value="saved">Saved</option>
-                        <option value="edited">Draft</option>
-                        <option value="linked">Archived</option>
+                        <option value="edited">Edited Version</option>
                     </select>
                 </div>
             </div>
@@ -2807,7 +2972,11 @@ function SavedMessagesPage() {
             q += `&customer_id=${currentUser.id}`;
         }
         if (filterOcc) q += `&occasion_id=${filterOcc}`;
-        if (filterStatus) q += `&status=${filterStatus}`;
+        if (filterStatus) {
+            q += `&status=${filterStatus}`;
+        } else {
+            q += `&status=saved,linked`;
+        }
 
         try {
             const res = await ApiService.getMessages(q);
@@ -2932,10 +3101,9 @@ function SavedMessagesPage() {
                         ${occasions.map(o => html`<option key=${o.id} value=${o.id}>${o.name}</option>`)}
                     </select>
                     <select value=${filterStatus} onChange=${e => { setFilterStatus(e.target.value); setPage(1); }}>
-                        <option value="">All Statuses</option>
-                        <option value="saved">Saved</option>
-                        <option value="linked">Archived</option>
-                        <option value="edited">Draft</option>
+                        <option value="">All Saved</option>
+                        <option value="saved">Saved Templates</option>
+                        <option value="linked">Linked to Order</option>
                     </select>
                 </div>
             </div>
@@ -2994,9 +3162,12 @@ function SavedMessagesPage() {
                             </div>
                             
                             <div class="saved-card-footer" style=${{ marginTop: '1.2rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-                                <div class="saved-card-badges">
+                                <div class="saved-card-badges" style=${{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                                     <span class="badge badge-indigo">${msg.occasion_name}</span>
                                     <span class="badge badge-info">${msg.tone_name || 'Warm'}</span>
+                                    <span class="badge ${msg.status === 'saved' ? 'badge-emerald' : 'badge-info'}">
+                                        ${msg.status === 'saved' ? 'Saved Template' : 'Linked to Order'}
+                                    </span>
                                 </div>
                                 <div class="saved-card-actions">
                                     <button class="btn-action-icon" onClick=${() => navigate('/generate', { state: { loadMessage: msg } })} title="Load to workspace">

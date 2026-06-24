@@ -99,7 +99,11 @@ def get_messages(status=None, customer_id=None, occasion_id=None, page=1, limit=
     query = Message.query
     
     if status:
-        query = query.filter_by(status=status)
+        if ',' in status:
+            statuses = [s.strip() for s in status.split(',') if s.strip()]
+            query = query.filter(Message.status.in_(statuses))
+        else:
+            query = query.filter_by(status=status)
     if customer_id:
         query = query.filter_by(customer_id=customer_id)
     if occasion_id:

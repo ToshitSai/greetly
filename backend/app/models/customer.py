@@ -13,6 +13,8 @@ class Customer(db.Model):
     phone = db.Column(db.String(20), nullable=True)
     password_hash = db.Column(db.String(255), nullable=True)
     password_reset_required = db.Column(db.Boolean, default=False, server_default='0', nullable=False)
+    reset_token = db.Column(db.String(255), nullable=True)
+    reset_token_expires = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Relationships

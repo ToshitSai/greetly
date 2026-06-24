@@ -43,6 +43,15 @@ def create_app(config_class=Config):
             "error": "The requested resource could not be found."
         }), 404
 
+    @app.errorhandler(429)
+    def handle_rate_limit_exceeded(e):
+        from flask import request
+        print(f"\n[RATE LIMIT TRIGGERED] Limit breached on path: {request.path} | IP: {request.remote_addr} | Description: {str(e.description)}", flush=True)
+        return jsonify({
+            "success": False,
+            "error": f"Rate limit exceeded: {str(e.description)}"
+        }), 429
+
     # Import and register routing blueprints
     from app.routes.auth_routes import auth_bp
     from app.routes.customer_routes import customer_bp

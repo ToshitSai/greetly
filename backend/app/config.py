@@ -9,13 +9,16 @@ class Config:
     SECRET_KEY = os.getenv('SECRET_KEY', 'default-paperplane-key-1234')
 
     # Administrator Account Credentials
-    ADMIN_EMAIL = os.getenv('ADMIN_EMAIL', 'admin@giftai.com')
-    ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'admin123')
+    ADMIN_EMAIL = os.getenv('ADMIN_EMAIL')
+    ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD')
 
     # Rate Limiting Configuration
     LIMIT_AI_GENERATION = os.getenv('LIMIT_AI_GENERATION', '10 per minute')
     LIMIT_AUTH = os.getenv('LIMIT_AUTH', '10 per 5 minutes')
     LIMIT_ADMIN = os.getenv('LIMIT_ADMIN', '30 per minute')
+    LIMIT_FORGOT_PASSWORD = os.getenv('LIMIT_FORGOT_PASSWORD', '5 per 15 minutes')
+    LIMIT_VALIDATE_OTP = os.getenv('LIMIT_VALIDATE_OTP', '20 per 15 minutes')
+    LIMIT_RESET_PASSWORD = os.getenv('LIMIT_RESET_PASSWORD', '10 per 15 minutes')
 
     # Database Configuration
     DB_USER = os.getenv('DB_USER', 'root')
