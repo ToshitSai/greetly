@@ -13,6 +13,12 @@ load_dotenv()
 # Create Flask application instance using the factory
 app = create_app()
 
+from app.models import db
+
+with app.app_context():
+    db.create_all()
+    print("✅ Database tables created")
+
 if __name__ == '__main__':
     # Get port from environment variables or default to 5000
     port = int(os.getenv('PORT', 5000))
