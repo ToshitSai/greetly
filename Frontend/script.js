@@ -24,8 +24,7 @@
 const html = window.htm.bind(React.createElement);
 
 // API Service Layer
-const API_BASE = 'http://localhost:5000/api';
-
+const API_BASE = 'https://giftai-backend-kpkw.onrender.com/api';
 const request = async (url, options = {}) => {
     const sessionStr = sessionStorage.getItem('giftai_session');
     let headers = options.headers || {};
@@ -3545,7 +3544,7 @@ function AdminPage() {
             const [custRes, statsRes, diagRes] = await Promise.all([
                 ApiService.getCustomers(),
                 ApiService.getStats(),
-                fetch('http://localhost:5000/api/diagnostics').then(r => r.json())
+                fetch('https://giftai-backend-kpkw.onrender.com/api/diagnostics')
             ]);
 
             if (custRes.success) setCustomers(custRes.data || []);
