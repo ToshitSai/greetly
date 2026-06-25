@@ -25,12 +25,14 @@ class Config:
     if _is_dev:
         LIMIT_FORGOT_PASSWORD = os.getenv('LIMIT_FORGOT_PASSWORD', '50 per minute')
         LIMIT_LOGIN = os.getenv('LIMIT_LOGIN', '50 per minute')
+        LIMIT_VALIDATE_OTP = os.getenv('LIMIT_VALIDATE_OTP', '100 per minute')
+        LIMIT_RESET_PASSWORD = os.getenv('LIMIT_RESET_PASSWORD', '100 per minute')
     else:
         LIMIT_FORGOT_PASSWORD = os.getenv('LIMIT_FORGOT_PASSWORD', '5 per 15 minutes')
         LIMIT_LOGIN = os.getenv('LIMIT_LOGIN', '5 per 15 minutes')
+        LIMIT_VALIDATE_OTP = os.getenv('LIMIT_VALIDATE_OTP', '20 per 15 minutes')
+        LIMIT_RESET_PASSWORD = os.getenv('LIMIT_RESET_PASSWORD', '10 per 15 minutes')
 
-    LIMIT_VALIDATE_OTP = os.getenv('LIMIT_VALIDATE_OTP', '20 per 15 minutes')
-    LIMIT_RESET_PASSWORD = os.getenv('LIMIT_RESET_PASSWORD', '10 per 15 minutes')
 
 
     # Database Configuration

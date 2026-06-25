@@ -782,13 +782,36 @@ function ForgotPasswordPage() {
         setPin(combinedPin);
 
         if (cleanVal && index < 5) {
-            otpRefs.current[index + 1]?.focus();
+            setTimeout(() => {
+                otpRefs.current[index + 1]?.focus();
+            }, 0);
         }
     };
 
     const handleOtpKeyDown = (index, e) => {
-        if (e.key === 'Backspace' && !otpArray[index] && index > 0) {
+        if (e.key === 'Backspace') {
+            e.preventDefault();
+            const newOtp = [...otpArray];
+            if (otpArray[index]) {
+                // If current input has value, clear it
+                newOtp[index] = '';
+                setOtpArray(newOtp);
+                setPin(newOtp.join(''));
+            } else if (index > 0) {
+                // If current is empty, clear previous and focus previous
+                newOtp[index - 1] = '';
+                setOtpArray(newOtp);
+                setPin(newOtp.join(''));
+                setTimeout(() => {
+                    otpRefs.current[index - 1]?.focus();
+                }, 0);
+            }
+        } else if (e.key === 'ArrowLeft' && index > 0) {
+            e.preventDefault();
             otpRefs.current[index - 1]?.focus();
+        } else if (e.key === 'ArrowRight' && index < 5) {
+            e.preventDefault();
+            otpRefs.current[index + 1]?.focus();
         }
     };
 
@@ -799,9 +822,12 @@ function ForgotPasswordPage() {
             const newOtp = pastedData.split('');
             setOtpArray(newOtp);
             setPin(pastedData);
-            otpRefs.current[5]?.focus();
+            setTimeout(() => {
+                otpRefs.current[5]?.focus();
+            }, 0);
         }
     };
+
 
     // Password strength logic
     const getPasswordStrength = (pwd) => {
@@ -1014,11 +1040,15 @@ function ForgotPasswordPage() {
                                         <input 
                                             key=${index}
                                             type="text" 
+                                            inputMode="numeric"
+                                            pattern="[0-9]*"
+                                            autoComplete="one-time-code"
                                             maxLength="1" 
                                             value=${otpArray[index]}
                                             onChange=${e => handleOtpChange(index, e.target.value)}
                                             onKeyDown=${e => handleOtpKeyDown(index, e)}
                                             onPaste=${handleOtpPaste}
+                                            onFocus=${e => e.target.select()}
                                             ref=${el => otpRefs.current[index] = el}
                                             style=${{
                                                 width: '44px',
