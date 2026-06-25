@@ -17,3 +17,4 @@ from app.models.message import Message
 from app.models.message_version import MessageVersion
 from app.models.gift_order import GiftOrder
 from app.models.greeting_card import GreetingCard
+from app.models.otp_verification import OTPVerification

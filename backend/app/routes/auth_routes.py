@@ -171,10 +171,11 @@ def forgot_password():
     """
     POST /api/auth/forgot-password
     Step 1 of password recovery. Checks if email is registered,
-    generates a timed 6-digit PIN, stores it, and prints it to the console.
+    enforces cooldown/rate limits, generates secure OTP, hashes it,
+    stores it, and sends the raw OTP via Resend.
     """
     try:
-        from app.services.reset_service import generate_and_persist_reset_token
+        from app.services.reset_service import generate_and_send_otp
         import os
         
         data = request.get_json() or {}
@@ -186,93 +187,99 @@ def forgot_password():
         email_clean = email.strip().lower()
         customer = Customer.query.filter_by(email=email_clean).first()
         
+        # 1. Enforce blind enumeration prevention: always return success if user doesn't exist
         if not customer:
-            return error_response("Email address not registered on this platform.", 404)
+            return success_response({
+                "message": "If an account exists for this email, a verification code has been sent."
+            })
             
-        # Use our reusable reset token service
-        pin = generate_and_persist_reset_token(customer.email)
-        
-        # Check if we are in development/debug mode
+        # 2. Generate and send OTP (handles DB persistence, rate limiting, and Resend delivery)
+        success, result = generate_and_send_otp(customer)
+        if not success:
+            # Check if it was a rate limit/cooldown block (status 429)
+            if "limit" in result.lower() or "wait" in result.lower() or "seconds" in result.lower():
+                return error_response(result, 429)
+            else:
+                # Configuration error or service unavailable (status 500)
+                # Keep the message clean as requested by the user
+                return error_response(result, 500)
+                
+        # Determine if we should return the raw OTP in the API response (ONLY in development/debug mode)
         is_dev = current_app.debug or (os.getenv('FLASK_ENV', 'development').lower() != 'production')
-        
         response_data = {
-            "message": "Verification PIN generated. Please check your recovery channel.",
-            "email": customer.email
+            "message": "If an account exists for this email, a verification code has been sent."
         }
         
         if is_dev:
-            response_data["dev_otp"] = pin
+            # Include dev_otp for automated testing convenience
+            response_data["dev_otp"] = result
             
         return success_response(response_data)
         
     except Exception as e:
         db.session.rollback()
-        return error_response(f"An unexpected recovery error occurred: {str(e)}", 500)
+        return error_response("Email service is temporarily unavailable. Please try again later.", 500)
 
 
-@auth_bp.route('/validate-otp', methods=['POST'])
+@auth_bp.route('/verify-reset-code', methods=['POST'])
 @limiter.limit(lambda: current_app.config.get('LIMIT_VALIDATE_OTP', '20 per 15 minutes'))
-def validate_otp():
+def verify_reset_code():
     """
-    POST /api/auth/validate-otp
-    Step 2 validation of password recovery. Checks if the verification PIN/OTP
-    is valid and not expired.
+    POST /api/auth/verify-reset-code
+    Step 2 validation of password recovery. Verifies if the 6-digit OTP
+    provided matches the active hashed code and is not expired/locked.
     """
     try:
-        from app.services.reset_service import verify_reset_token
+        from app.services.reset_service import verify_otp_record
         
         data = request.get_json() or {}
         email = data.get('email')
-        pin = data.get('pin')
+        otp = data.get('otp')
         
-        if not email or not pin:
-            return error_response("Email and verification PIN are required.", 400)
+        if not email or not otp:
+            return error_response("Email and verification code are required.", 400)
             
-        is_valid, result = verify_reset_token(email, pin)
+        is_valid, result = verify_otp_record(email, otp)
         if not is_valid:
+            # Result contains the error message
             return error_response(result, 400)
             
         return success_response({
-            "message": "Verification PIN is valid. Please proceed to set a new password."
+            "message": "Verification code is valid. Please proceed to set a new password."
         })
         
     except Exception as e:
-        return error_response(f"An unexpected validation error occurred: {str(e)}", 500)
+        return error_response("Verification is temporarily unavailable. Please try again later.", 500)
 
 
-@auth_bp.route('/verify-reset', methods=['POST'])
 @auth_bp.route('/reset-password', methods=['POST'])
 @limiter.limit(lambda: current_app.config.get('LIMIT_RESET_PASSWORD', '10 per 15 minutes'))
-def verify_reset():
+def reset_password():
     """
-    POST /api/auth/verify-reset
     POST /api/auth/reset-password
-    Step 3 of password recovery. Validates the verification PIN,
-    and updates the customer's password.
+    Step 3 of password recovery. Validates code, enforces password complexity rules,
+    hashes the new password, updates database, and invalidates/consumes OTP.
     """
     try:
-        from app.services.reset_service import complete_password_reset
+        from app.services.reset_service import reset_user_password
         
         data = request.get_json() or {}
         email = data.get('email')
-        pin = data.get('pin')
+        otp = data.get('otp')
         new_password = data.get('new_password')
         
-        if not email or not pin or not new_password:
-            return error_response("Email, verification PIN, and new password are required.", 400)
+        if not email or not otp or not new_password:
+            return error_response("Email, verification code, and new password are required.", 400)
             
-        if len(new_password) < 6:
-            return error_response("New password must be at least 6 characters.", 400)
-            
-        success, msg = complete_password_reset(email, pin, new_password)
+        success, result_msg = reset_user_password(email, otp, new_password)
         if not success:
-            return error_response(msg, 400)
+            return error_response(result_msg, 400)
             
         return success_response({
-            "message": msg
+            "message": "Password updated successfully."
         })
         
     except Exception as e:
         db.session.rollback()
-        return error_response(f"An unexpected reset verification error occurred: {str(e)}", 500)
+        return error_response("Password reset is temporarily unavailable. Please try again later.", 500)
 

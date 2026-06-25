@@ -160,16 +160,16 @@ const ApiService = {
             body: JSON.stringify({ email })
         });
     },
-    async validateOtp(email, pin) {
-        return request(`${API_BASE}/auth/validate-otp`, {
+    async verifyResetCode(email, otp) {
+        return request(`${API_BASE}/auth/verify-reset-code`, {
             method: 'POST',
-            body: JSON.stringify({ email, pin })
+            body: JSON.stringify({ email, otp })
         });
     },
-    async verifyReset(email, pin, newPassword) {
+    async resetPassword(email, otp, newPassword) {
         return request(`${API_BASE}/auth/reset-password`, {
             method: 'POST',
-            body: JSON.stringify({ email, pin, new_password: newPassword })
+            body: JSON.stringify({ email, otp, new_password: newPassword })
         });
     }
 };
@@ -720,6 +720,7 @@ function ForgotPasswordPage() {
     
     // Recovery states
     const [email, setEmail] = useState('');
+    const [otpArray, setOtpArray] = useState(['', '', '', '', '', '']);
     const [pin, setPin] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -728,12 +729,15 @@ function ForgotPasswordPage() {
     
     // Dev Mode Helpers & Cooldowns
     const [devOtp, setDevOtp] = useState(null);
-    const [countdown, setCountdown] = useState(900); // 15-minute OTP validity
+    const [countdown, setCountdown] = useState(600); // 10-minute OTP validity
     const [resendCooldown, setResendCooldown] = useState(60); // 60s resend throttle
+    const [showPassword, setShowPassword] = useState(false);
+
+    const otpRefs = useRef([]);
 
     useEffect(() => {
         if (window.lucide) window.lucide.createIcons();
-    }, [step, devOtp]);
+    }, [step, devOtp, showPassword, newPassword]);
 
     // Timers Effect
     useEffect(() => {
@@ -752,10 +756,80 @@ function ForgotPasswordPage() {
         return () => clearInterval(timer);
     }, [step, resendCooldown]);
 
+    // Auto focus the first input on load/step 2 transition
+    useEffect(() => {
+        if (step === 2) {
+            setTimeout(() => {
+                otpRefs.current[0]?.focus();
+            }, 100);
+        }
+    }, [step]);
+
     const formatTime = (seconds) => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
         return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    };
+
+    // OTP Input logic
+    const handleOtpChange = (index, val) => {
+        const cleanVal = val.replace(/\D/g, '').slice(0, 1);
+        const newOtp = [...otpArray];
+        newOtp[index] = cleanVal;
+        setOtpArray(newOtp);
+        
+        const combinedPin = newOtp.join('');
+        setPin(combinedPin);
+
+        if (cleanVal && index < 5) {
+            otpRefs.current[index + 1]?.focus();
+        }
+    };
+
+    const handleOtpKeyDown = (index, e) => {
+        if (e.key === 'Backspace' && !otpArray[index] && index > 0) {
+            otpRefs.current[index - 1]?.focus();
+        }
+    };
+
+    const handleOtpPaste = (e) => {
+        e.preventDefault();
+        const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+        if (pastedData.length === 6) {
+            const newOtp = pastedData.split('');
+            setOtpArray(newOtp);
+            setPin(pastedData);
+            otpRefs.current[5]?.focus();
+        }
+    };
+
+    // Password strength logic
+    const getPasswordStrength = (pwd) => {
+        if (!pwd) return { score: 0, label: 'None', color: 'transparent' };
+        
+        let score = 0;
+        if (pwd.length >= 8) score += 2;
+        else if (pwd.length >= 6) score += 1;
+        
+        if (/[A-Z]/.test(pwd)) score += 1;
+        if (/[a-z]/.test(pwd)) score += 1;
+        if (/[0-9]/.test(pwd)) score += 1;
+        if (/[^A-Za-z0-9]/.test(pwd)) score += 1;
+        
+        let label = 'Weak';
+        let color = '#ef4444'; // Red
+        
+        if (pwd.length < 8) {
+            label = 'Weak (Min 8 chars)';
+            color = '#ef4444';
+        } else if (score >= 5) {
+            label = 'Strong';
+            color = '#22c55e'; // Green
+        } else if (score >= 3) {
+            label = 'Medium';
+            color = '#f59e0b'; // Amber
+        }
+        return { score, label, color };
     };
 
     const handleVerifyEmail = async (e) => {
@@ -766,20 +840,22 @@ function ForgotPasswordPage() {
         try {
             const res = await ApiService.forgotPassword(email.trim());
             if (res.success) {
-                showToast("Verification code generated!");
+                showToast("Verification code requested!");
                 if (res.data && res.data.dev_otp) {
                     setDevOtp(res.data.dev_otp);
                 } else {
                     setDevOtp(null);
                 }
-                setCountdown(900); // Reset OTP validity timer (15 minutes)
+                setOtpArray(['', '', '', '', '', '']);
+                setPin('');
+                setCountdown(600); // Reset OTP validity timer (10 minutes)
                 setResendCooldown(60); // Reset resend cooldown
                 setStep(2);
             } else {
                 if (res.status === 429) {
-                    showToast("Too many verification attempts. Please wait and try again.", true);
+                    showToast(res.error || "Too many recovery attempts. Please wait.", true);
                 } else {
-                    showToast(res.error || "Email verification failed.", true);
+                    showToast(res.error || "Failed to send verification code.", true);
                 }
             }
         } catch (err) {
@@ -790,8 +866,8 @@ function ForgotPasswordPage() {
 
     const handleVerifyOtp = async (e) => {
         e.preventDefault();
-        if (!pin.trim()) {
-            showToast("Verification PIN is required.", true);
+        if (pin.length !== 6) {
+            showToast("Please enter the 6-digit code.", true);
             return;
         }
         if (countdown <= 0) {
@@ -801,16 +877,12 @@ function ForgotPasswordPage() {
         setLoading(true);
 
         try {
-            const res = await ApiService.validateOtp(email.trim(), pin.trim());
+            const res = await ApiService.verifyResetCode(email.trim(), pin.trim());
             if (res.success) {
                 showToast("Code verified successfully.");
                 setStep(3);
             } else {
-                if (res.status === 429) {
-                    showToast("Too many verification attempts. Please wait and try again.", true);
-                } else {
-                    showToast(res.error || "Invalid verification code.", true);
-                }
+                showToast(res.error || "Invalid verification code.", true);
             }
         } catch (err) {
             showToast("Connection error during code validation.", true);
@@ -824,23 +896,34 @@ function ForgotPasswordPage() {
             showToast("Passwords do not match.", true);
             return;
         }
-        if (newPassword.length < 6) {
-            showToast("Password must be at least 6 characters.", true);
+        
+        // Stronger validations
+        if (newPassword.length < 8) {
+            showToast("Password must be at least 8 characters.", true);
             return;
         }
+        if (!/[A-Z]/.test(newPassword)) {
+            showToast("Password must contain at least one uppercase letter.", true);
+            return;
+        }
+        if (!/[a-z]/.test(newPassword)) {
+            showToast("Password must contain at least one lowercase letter.", true);
+            return;
+        }
+        if (!/[0-9]/.test(newPassword)) {
+            showToast("Password must contain at least one number.", true);
+            return;
+        }
+
         setLoading(true);
 
         try {
-            const res = await ApiService.verifyReset(email.trim(), pin.trim(), newPassword);
+            const res = await ApiService.resetPassword(email.trim(), pin.trim(), newPassword);
             if (res.success) {
                 setStep(4);
                 showToast("Password reset successfully!");
             } else {
-                if (res.status === 429) {
-                    showToast("Too many verification attempts. Please wait and try again.", true);
-                } else {
-                    showToast(res.error || "Password reset failed.", true);
-                }
+                showToast(res.error || "Password reset failed.", true);
             }
         } catch (err) {
             showToast("Connection error during password reset.", true);
@@ -860,8 +943,9 @@ function ForgotPasswordPage() {
                 } else {
                     setDevOtp(null);
                 }
+                setOtpArray(['', '', '', '', '', '']);
                 setPin('');
-                setCountdown(900);
+                setCountdown(600);
                 setResendCooldown(60);
             } else {
                 showToast(res.error || "Resend failed.", true);
@@ -871,6 +955,8 @@ function ForgotPasswordPage() {
         }
         setLoading(false);
     };
+
+    const strength = getPasswordStrength(newPassword);
 
     return html`
         <div class="auth-wrapper">
@@ -904,7 +990,7 @@ function ForgotPasswordPage() {
                                 </div>
                             </div>
                             <button type="submit" class="btn-primary" style=${{ width: '100%', marginTop: '1rem' }} disabled=${loading}>
-                                <span>${loading ? 'Verifying Account...' : 'Continue'}</span>
+                                <span>${loading ? 'Sending verification code...' : 'Send Verification Code'}</span>
                                 ${loading && html`<div class="spinner"></div>`}
                             </button>
                         </form>
@@ -913,23 +999,45 @@ function ForgotPasswordPage() {
                     ${step === 2 && html`
                         <div class="auth-card-header">
                             <h2>Enter Verification Code</h2>
-                            <p>We generated a verification code for <strong>${email}</strong></p>
+                            <p>Enter the 6-digit verification code sent to <strong>${email}</strong></p>
                         </div>
                         <form onSubmit=${handleVerifyOtp}>
                             <div class="form-group">
                                 <div style=${{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-                                    <label style=${{ margin: 0 }}>Verification PIN</label>
-                                    <span style=${{ fontSize: '0.75rem', color: countdown <= 120 ? 'var(--color-danger)' : 'var(--text-muted)', fontWeight: 600 }}>
+                                    <label style=${{ margin: 0 }}>Verification Code</label>
+                                    <span style=${{ fontSize: '0.75rem', color: countdown <= 60 ? 'var(--color-danger)' : 'var(--text-muted)', fontWeight: 600 }}>
                                         Expires in: ${formatTime(countdown)}
                                     </span>
                                 </div>
-                                <div class="input-with-icon">
-                                    <i data-lucide="key-round"></i>
-                                    <input type="text" placeholder="123456" maxLength="6" value=${pin} onChange=${e => setPin(e.target.value.replace(/\D/g, ''))} required />
+                                <div class="otp-inputs-row" style=${{ display: 'flex', gap: '0.5rem', justifyContent: 'center', margin: '1.2rem 0' }}>
+                                    ${[0, 1, 2, 3, 4, 5].map(index => html`
+                                        <input 
+                                            key=${index}
+                                            type="text" 
+                                            maxLength="1" 
+                                            value=${otpArray[index]}
+                                            onChange=${e => handleOtpChange(index, e.target.value)}
+                                            onKeyDown=${e => handleOtpKeyDown(index, e)}
+                                            onPaste=${handleOtpPaste}
+                                            ref=${el => otpRefs.current[index] = el}
+                                            style=${{
+                                                width: '44px',
+                                                height: '44px',
+                                                textAlign: 'center',
+                                                fontSize: '1.2rem',
+                                                fontWeight: 'bold',
+                                                background: 'var(--bg-input)',
+                                                border: '1px solid var(--border-color)',
+                                                borderRadius: 'var(--radius-sm)',
+                                                color: 'var(--text-primary)'
+                                            }}
+                                            required
+                                        />
+                                    `)}
                                 </div>
                             </div>
 
-                            <button type="submit" class="btn-primary" style=${{ width: '100%', marginTop: '1rem' }} disabled=${loading || countdown <= 0}>
+                            <button type="submit" class="btn-primary" style=${{ width: '100%', marginTop: '0.5rem' }} disabled=${loading || countdown <= 0}>
                                 <span>${loading ? 'Verifying Code...' : 'Verify Code'}</span>
                                 ${loading && html`<div class="spinner"></div>`}
                             </button>
@@ -961,16 +1069,46 @@ function ForgotPasswordPage() {
                         <form onSubmit=${handleResetPassword}>
                             <div class="form-group">
                                 <label>New Password</label>
-                                <div class="input-with-icon">
+                                <div class="input-with-icon" style=${{ position: 'relative' }}>
                                     <i data-lucide="lock"></i>
-                                    <input type="password" placeholder="••••••••" value=${newPassword} onChange=${e => setNewPassword(e.target.value)} required />
+                                    <input 
+                                        type=${showPassword ? 'text' : 'password'} 
+                                        placeholder="••••••••" 
+                                        value=${newPassword} 
+                                        onChange=${e => setNewPassword(e.target.value)} 
+                                        required 
+                                    />
+                                    <button 
+                                        type="button" 
+                                        onClick=${() => setShowPassword(!showPassword)}
+                                        style=${{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center' }}
+                                    >
+                                        <i data-lucide=${showPassword ? 'eye-off' : 'eye'} style=${{ width: '16px', height: '16px' }}></i>
+                                    </button>
                                 </div>
+                                ${newPassword && html`
+                                    <div class="password-strength-wrapper" style=${{ marginTop: '0.6rem' }}>
+                                        <div style=${{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '0.3rem' }}>
+                                            <span style=${{ color: 'var(--text-muted)' }}>Password Strength:</span>
+                                            <span style=${{ fontWeight: 600, color: strength.color }}>${strength.label}</span>
+                                        </div>
+                                        <div style=${{ height: '4px', background: 'rgba(255,255,255,0.08)', borderRadius: '2px', overflow: 'hidden' }}>
+                                            <div style=${{ height: '100%', width: `${(strength.score / 6) * 100}%`, backgroundColor: strength.color, transition: 'width 0.2s' }}></div>
+                                        </div>
+                                    </div>
+                                `}
                             </div>
                             <div class="form-group">
                                 <label>Confirm Password</label>
                                 <div class="input-with-icon">
                                     <i data-lucide="lock"></i>
-                                    <input type="password" placeholder="••••••••" value=${confirmPassword} onChange=${e => setConfirmPassword(e.target.value)} required />
+                                    <input 
+                                        type=${showPassword ? 'text' : 'password'} 
+                                        placeholder="••••••••" 
+                                        value=${confirmPassword} 
+                                        onChange=${e => setConfirmPassword(e.target.value)} 
+                                        required 
+                                    />
                                 </div>
                             </div>
                             <button type="submit" class="btn-primary" style=${{ width: '100%', marginTop: '1rem' }} disabled=${loading}>
@@ -989,9 +1127,9 @@ function ForgotPasswordPage() {
                             <div style=${{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(34, 197, 94, 0.15)', color: 'var(--color-success)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.2rem' }}>
                                 <i data-lucide="check-circle" style=${{ width: '28px', height: '28px' }}></i>
                             </div>
-                            <h2>Password Restored</h2>
-                            <p style=${{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '0.5rem', marginBottom: '1.5rem' }}>Your new credentials have been synchronized successfully.</p>
-                            <button class="btn-primary" style=${{ width: '100%' }} onClick=${() => navigate('/login')}>Back to Sign In</button>
+                            <h2>Password Updated Successfully</h2>
+                            <p style=${{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '0.5rem', marginBottom: '1.5rem' }}>Your password has been updated successfully.<br />You can now sign in using your new password.</p>
+                            <button class="btn-primary" style=${{ width: '100%' }} onClick=${() => navigate('/login')}>Return to Login</button>
                         </div>
                     `}
 
