@@ -104,6 +104,9 @@ const ApiService = {
     async checkHealth() {
         return request(`${API_BASE}/health`);
     },
+    async getDiagnostics() {
+        return request(`${API_BASE}/diagnostics`);
+    },
     async generateMessage(payload) {
         return request(`${API_BASE}/messages/generate`, {
             method: 'POST',
@@ -1048,7 +1051,7 @@ function ForgotPasswordPage() {
                                         Expires in: ${formatTime(countdown)}
                                     </span>
                                 </div>
-                                <div class="otp-inputs-row" style=${{ display: 'flex', gap: '0.5rem', justifyContent: 'center', margin: '1.2rem 0' }}>
+                                <div class="otp-inputs-row">
                                     ${[0, 1, 2, 3, 4, 5].map(index => html`
                                         <input 
                                             key=${index}
@@ -1225,13 +1228,12 @@ function AppContent() {
         setToast({ show: true, message, isError });
     };
 
-    // Load bootstrap lists
-    const loadBootstrapData = async () => {
+    const [staticLoaded, setStaticLoaded] = useState(false);
+    const [customersList, setCustomersList] = useState([]);
+
+    // Load static bootstrap lists
+    const loadStaticData = async () => {
         try {
-            // CRITICAL FIX: Load occasions and tones FIRST in their own Promise.all
-            // completely separated from stats (which requires auth and can return 401).
-            // A 401 on stats fires auth-failed which wipes state — this prevents that
-            // from blocking the dropdown data.
             const [occRes, toneRes] = await Promise.all([
                 ApiService.getOccasions(),
                 ApiService.getTones()
@@ -1240,101 +1242,106 @@ function AppContent() {
             setOccasions(occRes.data || []);
             setTones(toneRes.data || []);
 
-            // Load stats separately so its 401 doesn't affect occasions/tones
             const statsRes = await ApiService.getStats().catch(() => ({ success: false }));
             if (statsRes.success) setStats(statsRes.data);
 
-            let recipientsPromise;
-            let customersPromise;
-
+            let custData = [];
             if (role === 'admin') {
-                customersPromise = ApiService.getCustomers();
-            } else if (currentUser) {
-                const targetCustId = currentUser.id;
-                recipientsPromise = ApiService.getRecipients(`?customer_id=${targetCustId}`);
-            }
-
-            // Dummy statsRes for legacy code compatibility
-            const statsRes_compat = statsRes;
-
-            let custRes;
-            if (role === 'admin' && customersPromise) {
-                custRes = await customersPromise;
-                if (!custRes.data || custRes.data.length === 0) {
+                const custRes = await ApiService.getCustomers();
+                let list = custRes.data || [];
+                if (list.length === 0) {
                     const seeded = await ApiService.createCustomer("Internship Reviewer", "reviewer@paperplane.com");
-                    custRes = { success: true, data: [seeded.data] };
+                    list = [seeded.data];
                 }
 
                 // Sync System Admin customer record in database
-                let adminCust = custRes.data.find(c => c.email.toLowerCase() === currentUser.email.toLowerCase());
+                let adminCust = list.find(c => c.email.toLowerCase() === currentUser.email.toLowerCase());
                 if (!adminCust) {
                     const newAdminCust = await ApiService.createCustomer(currentUser.name, currentUser.email);
                     if (newAdminCust.success) {
-                        custRes.data.push(newAdminCust.data);
+                        list.push(newAdminCust.data);
                         adminCust = newAdminCust.data;
                     }
                 }
                 if (adminCust && currentUser && currentUser.id === 0) {
                     setCurrentUser(prev => ({ ...prev, id: adminCust.id }));
                 }
+                custData = list;
             } else {
-                custRes = { success: true, data: currentUser ? [currentUser] : [] };
+                custData = currentUser ? [currentUser] : [];
             }
+            setCustomersList(custData);
+            setStaticLoaded(true);
+            return custData;
+        } catch (err) {
+            console.error(err);
+            showToast("Database server offline. Start Flask first!", true);
+            return [];
+        }
+    };
 
-            // Sync workspaceCustomer selection
-            if (currentUser && role === 'user') {
-                setWorkspaceCustomer(currentUser.id);
-            } else if (role === 'admin') {
-                if (!workspaceCustomer) {
-                    setWorkspaceCustomer('all');
-                }
-            } else {
-                if (!workspaceCustomer && custRes.data && custRes.data.length > 0) {
-                    setWorkspaceCustomer(custRes.data[0].id);
-                }
-            }
-
+    const loadWorkspaceRecipients = async (activeCustId, currentCusts = null) => {
+        try {
+            const currentCustomers = currentCusts || customersList;
             let filteredRecipients = [];
+
             if (role === 'admin') {
                 let q_rec = '';
-                if (workspaceCustomer !== 'all') {
-                    q_rec = `?customer_id=${workspaceCustomer}`;
+                if (activeCustId !== 'all') {
+                    q_rec = `?customer_id=${activeCustId}`;
                 }
                 const recRes = await ApiService.getRecipients(q_rec);
                 filteredRecipients = recRes.data || [];
-            } else if (recipientsPromise) {
-                const recRes = await recipientsPromise;
+            } else if (currentUser) {
+                const recRes = await ApiService.getRecipients(`?customer_id=${currentUser.id}`);
                 filteredRecipients = recRes.data || [];
             }
 
             if (filteredRecipients.length === 0) {
-                const targetCustId = (currentUser && (role === 'user' || (role === 'admin' && workspaceCustomer !== 'all')))
-                    ? (role === 'admin' ? workspaceCustomer : currentUser.id)
-                    : (custRes.data && custRes.data[0] ? custRes.data[0].id : 1);
+                const targetCustId = (currentUser && (role === 'user' || (role === 'admin' && activeCustId !== 'all')))
+                    ? (role === 'admin' ? activeCustId : currentUser.id)
+                    : (currentCustomers && currentCustomers[0] ? currentCustomers[0].id : 1);
                 const seededRec = await ApiService.createRecipient(targetCustId, "Aunt Sarah", "Aunt");
                 filteredRecipients = [seededRec.data];
             }
 
-            if (currentUser && (role === 'user' || (role === 'admin' && workspaceCustomer !== 'all'))) {
-                const targetCustId = role === 'admin' ? workspaceCustomer : currentUser.id;
+            if (currentUser && (role === 'user' || (role === 'admin' && activeCustId !== 'all'))) {
+                const targetCustId = role === 'admin' ? activeCustId : currentUser.id;
                 filteredRecipients = filteredRecipients.filter(r => r && r.customer_id === targetCustId);
             }
             setRecipients(filteredRecipients);
-
         } catch (err) {
-            console.error(err);
-            showToast("Database server offline. Start Flask first!", true);
+            console.error("Error loading workspace recipients:", err);
         }
     };
 
     useEffect(() => {
         if (currentUser) {
             showToast("Setting up AI Workspace...");
-            loadBootstrapData();
+            loadStaticData().then((custs) => {
+                let initialWorkspace = workspaceCustomer;
+                if (role === 'user') {
+                    initialWorkspace = currentUser.id;
+                    setWorkspaceCustomer(currentUser.id);
+                } else if (role === 'admin') {
+                    if (!workspaceCustomer || workspaceCustomer === 'all') {
+                        initialWorkspace = 'all';
+                        setWorkspaceCustomer('all');
+                    }
+                }
+                loadWorkspaceRecipients(initialWorkspace, custs);
+            });
+        } else {
+            setStaticLoaded(false);
+            setCustomersList([]);
         }
-        
+    }, [currentUser]);
 
-    }, [currentUser, workspaceCustomer]);
+    useEffect(() => {
+        if (currentUser && staticLoaded) {
+            loadWorkspaceRecipients(workspaceCustomer);
+        }
+    }, [workspaceCustomer, staticLoaded]);
 
     const value = {
         theme, setTheme,
@@ -2125,7 +2132,7 @@ function DashboardPage() {
             </div>
 
             <!-- KPI Cards Grid with trend badges & Fades -->
-            <div class="metrics-grid" style=${{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
+            <div class="metrics-grid">
                 <${motion.div} initial=${{ opacity: 0, y: 10 }} animate=${{ opacity: 1, y: 0 }} transition=${{ delay: 0.05 }} class="metric-card glass-card">
                     <div class="card-glow"></div>
                     <div class="metric-header">
@@ -2203,7 +2210,7 @@ function DashboardPage() {
             <${ReportsSection} stats=${role === 'admin' && workspaceCustomer === 'all' ? stats : localStats} recentMessages=${recentMessages} />
 
             <!-- Recent Activity Widget & Diagnostics -->
-            <div class="dashboard-secondary-grid" style=${{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '2rem', marginBottom: '2rem' }}>
+            <div class="dashboard-secondary-grid">
                 <div class="glass-card" style=${{ padding: '1.8rem' }}>
                     <h3 style=${{ marginBottom: '1.2rem', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <i data-lucide="activity" style=${{ width: '16px', color: 'var(--color-primary)' }}></i> Recent Activity log
@@ -2215,7 +2222,7 @@ function DashboardPage() {
                     <h3 style=${{ fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <i data-lucide="activity" class="diag-pulse" style=${{ width: '16px' }}></i> Infrastructure Status
                     </h3>
-                    <div class="diagnostics-grid" style=${{ gridTemplateColumns: '1fr', gap: '0.8rem' }}>
+                    <div class="diagnostics-grid-single-col">
                         <div class="diag-item">
                             <span class="diag-label">Active Provider</span>
                             <span class="diag-value">${diag.provider}</span>
@@ -2327,7 +2334,7 @@ function ReportsSection({ stats, recentMessages }) {
     }, [stats]);
 
     return html`
-        <div class="charts-grid" style=${{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '2rem', marginBottom: '2rem' }}>
+        <div class="charts-grid">
             <!-- Occasions Bar Chart -->
             <div class="chart-card glass-card" style=${{ padding: '1.5rem', height: '350px' }}>
                 <h3 style=${{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '1rem', color: 'var(--text-main)' }}>
@@ -2988,6 +2995,15 @@ function MessageRequestsPage() {
     const [editingRequest, setEditingRequest] = useState(null);
     const [editingText, setEditingText] = useState('');
 
+    const filteredRequests = useMemo(() => {
+        if (!search.trim()) return requests;
+        const match = search.toLowerCase();
+        return requests.filter(m => 
+            (m.recipient_name && m.recipient_name.toLowerCase().includes(match)) ||
+            (m.relationship && m.relationship.toLowerCase().includes(match))
+        );
+    }, [requests, search]);
+
     const fetchRequests = async () => {
         if (!currentUser) return;
         setLoading(true);
@@ -3026,14 +3042,6 @@ function MessageRequestsPage() {
                     };
                 });
 
-                if (search.trim()) {
-                    const match = search.toLowerCase();
-                    list = list.filter(m => 
-                        (m.recipient_name && m.recipient_name.toLowerCase().includes(match)) ||
-                        (m.relationship && m.relationship.toLowerCase().includes(match))
-                    );
-                }
-
                 setRequests(list);
                 setTotal(res.total || 0);
             }
@@ -3045,7 +3053,7 @@ function MessageRequestsPage() {
 
     useEffect(() => {
         fetchRequests();
-    }, [page, filterOcc, filterStatus, search, workspaceCustomer]);
+    }, [page, filterOcc, filterStatus, workspaceCustomer]);
 
     useEffect(() => {
         if (window.lucide) window.lucide.createIcons();
@@ -3159,9 +3167,9 @@ function MessageRequestsPage() {
                         <tbody>
                             ${loading ? html`
                                 <tr><td colspan="7" style=${{ textAlign: 'center', padding: '3rem' }}>Loading Requests...</td></tr>
-                            ` : requests.length === 0 ? html`
+                            ` : filteredRequests.length === 0 ? html`
                                 <tr><td colspan="7" style=${{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>No message requests found. Try composing some greetings first!</td></tr>
-                            ` : requests.map(req => {
+                            ` : filteredRequests.map(req => {
                                 const dateStr = req.created_at
                                     ? (() => {
                                         const d = new Date(req.created_at);
@@ -3286,6 +3294,15 @@ function SavedMessagesPage() {
     const [localFavs, setLocalFavs] = useState(() => JSON.parse(localStorage.getItem('wishforge_fav_messages') || '[]'));
     const [visibleLimit, setVisibleLimit] = useState(10);
 
+    const filteredMessages = useMemo(() => {
+        if (!search.trim()) return messages;
+        const match = search.toLowerCase();
+        return messages.filter(m => 
+            (m.recipient_name && m.recipient_name.toLowerCase().includes(match)) ||
+            (m.relationship && m.relationship.toLowerCase().includes(match))
+        );
+    }, [messages, search]);
+
     const fetchSaved = async () => {
         if (!currentUser) return;
         setLoading(true);
@@ -3330,13 +3347,6 @@ function SavedMessagesPage() {
                     };
                 });
 
-                if (search.trim()) {
-                    const match = search.toLowerCase();
-                    list = list.filter(m => 
-                        (m.recipient_name && m.recipient_name.toLowerCase().includes(match)) ||
-                        (m.relationship && m.relationship.toLowerCase().includes(match))
-                    );
-                }
                 setMessages(list);
                 setTotal(res.total || 0);
             }
@@ -3348,22 +3358,22 @@ function SavedMessagesPage() {
 
     useEffect(() => {
         fetchSaved();
-    }, [page, filterOcc, filterStatus, search, workspaceCustomer]);
+    }, [page, filterOcc, filterStatus, workspaceCustomer]);
 
     // Handle scroll for virtualized/lazy rendering
     useEffect(() => {
         const handleScroll = () => {
             if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 200) {
-                setVisibleLimit(prev => Math.min(prev + 10, messages.length));
+                setVisibleLimit(prev => Math.min(prev + 10, filteredMessages.length));
             }
         };
         window.addEventListener('scroll', handleScroll);
         return () => window.removeEventListener('scroll', handleScroll);
-    }, [messages.length]);
+    }, [filteredMessages.length]);
 
     useEffect(() => {
         setVisibleLimit(10);
-    }, [messages]);
+    }, [filteredMessages]);
 
     // Lucide Icons auto-instantiation hook
     // ROOT CAUSE FIX: After Lucide replaces <i data-lucide="heart"> with a fresh <svg>,
@@ -3397,7 +3407,7 @@ function SavedMessagesPage() {
             });
         });
         return () => cancelAnimationFrame(raf);
-    }, [messages, loading, viewMode, editingId, localFavs, activeMenuId]);
+    }, [filteredMessages, loading, viewMode, editingId, localFavs, activeMenuId]);
 
     const handleCopy = (txt) => {
         navigator.clipboard.writeText(txt).then(() => showToast("Copied to clipboard!"));
@@ -3543,13 +3553,13 @@ function SavedMessagesPage() {
                         <div class="shimmer-card"></div>
                         <div class="shimmer-card"></div>
                     </div>
-                ` : messages.length === 0 ? html`
+                ` : filteredMessages.length === 0 ? html`
                     <div class="output-empty-state" style=${{ gridColumn: '1 / -1', padding: '4rem 1.5rem' }}>
                         <div class="empty-icon"><i data-lucide="bookmark-x"></i></div>
                         <h3>No Saved Templates</h3>
                         <p>Generate some templates or tweak search queries to view lists.</p>
                     </div>
-                ` : messages.slice(0, visibleLimit).map(msg => {
+                ` : filteredMessages.slice(0, visibleLimit).map(msg => {
                     const formattedDate = msg.created_at
                         ? (() => {
                             const d = new Date(msg.created_at);
@@ -3679,10 +3689,9 @@ function HistoryPage() {
     const { showToast } = useContext(ToastContext);
     const { currentUser, role } = useContext(AuthContext);
 
-    const [logs, setLogs] = useState([]);
+        const [rawLogs, setRawLogs] = useState([]);
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
-    const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(false);
 
     // Dynamic Filter states
@@ -3736,54 +3745,7 @@ function HistoryPage() {
                         customer_name: cust ? cust.name : `User #${m.customer_id}`
                     };
                 });
-
-                // Apply text search
-                if (search.trim()) {
-                    const match = search.toLowerCase();
-                    list = list.filter(m => 
-                        (m.recipient_name && m.recipient_name.toLowerCase().includes(match)) ||
-                        (m.occasion_name && m.occasion_name.toLowerCase().includes(match))
-                    );
-                }
-
-                // Apply date range filter
-                if (filterDate) {
-                    const now = new Date();
-                    list = list.filter(m => {
-                        const d = new Date(m.created_at);
-                        if (filterDate === 'today') {
-                            return d.toDateString() === now.toDateString();
-                        } else if (filterDate === 'week') {
-                            const diffTime = Math.abs(now - d);
-                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                            return diffDays <= 7;
-                        } else if (filterDate === 'month') {
-                            return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-                        }
-                        return true;
-                    });
-                }
-
-                // Apply occasion filter
-                if (filterOcc) {
-                    list = list.filter(m => m.occasion_id === parseInt(filterOcc));
-                }
-
-                // Apply tone filter
-                if (filterTone) {
-                    list = list.filter(m => m.tone_id === parseInt(filterTone));
-                }
-
-                // Apply status filter
-                if (filterStatus) {
-                    list = list.filter(m => m.status === filterStatus);
-                }
-
-                // Client-side pagination
-                const limit = 8;
-                setTotal(list.length);
-                const startIndex = (page - 1) * limit;
-                setLogs(list.slice(startIndex, startIndex + limit));
+                setRawLogs(list);
             }
         } catch (err) {
             showToast("Failed to fetch history logs.", true);
@@ -3793,9 +3755,66 @@ function HistoryPage() {
 
     useEffect(() => {
         fetchHistory();
-    }, [page, search, filterDate, filterOcc, filterTone, filterStatus, workspaceCustomer, customers]);
+    }, [workspaceCustomer, customers]);
 
-    const totalPages = Math.max(1, Math.ceil(total / 8));
+    const filteredAndPaginated = useMemo(() => {
+        let list = [...rawLogs];
+
+        // Apply text search
+        if (search.trim()) {
+            const match = search.toLowerCase();
+            list = list.filter(m => 
+                (m.recipient_name && m.recipient_name.toLowerCase().includes(match)) ||
+                (m.occasion_name && m.occasion_name.toLowerCase().includes(match))
+            );
+        }
+
+        // Apply date range filter
+        if (filterDate) {
+            const now = new Date();
+            list = list.filter(m => {
+                const d = new Date(m.created_at);
+                if (filterDate === 'today') {
+                    return d.toDateString() === now.toDateString();
+                } else if (filterDate === 'week') {
+                    const diffTime = Math.abs(now - d);
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    return diffDays <= 7;
+                } else if (filterDate === 'month') {
+                    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+                }
+                return true;
+            });
+        }
+
+        // Apply occasion filter
+        if (filterOcc) {
+            list = list.filter(m => m.occasion_id === parseInt(filterOcc));
+        }
+
+        // Apply tone filter
+        if (filterTone) {
+            list = list.filter(m => m.tone_id === parseInt(filterTone));
+        }
+
+        // Apply status filter
+        if (filterStatus) {
+            list = list.filter(m => m.status === filterStatus);
+        }
+
+        // Client-side pagination
+        const limit = 8;
+        const totalCount = list.length;
+        const startIndex = (page - 1) * limit;
+        const paginatedLogs = list.slice(startIndex, startIndex + limit);
+
+        return {
+            totalCount,
+            paginatedLogs
+        };
+    }, [rawLogs, search, filterDate, filterOcc, filterTone, filterStatus, page]);
+
+    const totalPages = Math.max(1, Math.ceil(filteredAndPaginated.totalCount / 8));
 
     return html`
         <${motion.div} ...${pageTransition} class="route-wrapper" role="tabpanel">
@@ -3813,7 +3832,7 @@ function HistoryPage() {
                     <input type="text" placeholder="Filter audit logs by keyword..." value=${search} onChange=${e => { setSearch(e.target.value); setPage(1); }} />
                 </div>
                 
-                <div style=${{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.8rem' }}>
+                <div class="history-filter-grid">
                     <div class="glass-select">
                         <select value=${filterDate} onChange=${e => { setFilterDate(e.target.value); setPage(1); }}>
                             <option value="">Any Date Range</option>
@@ -3856,13 +3875,13 @@ function HistoryPage() {
                         <div class="shimmer-card" style=${{ height: '80px' }}></div>
                         <div class="shimmer-card" style=${{ height: '80px' }}></div>
                     </div>
-                ` : logs.length === 0 ? html`
+                ` : filteredAndPaginated.paginatedLogs.length === 0 ? html`
                     <div class="output-empty-state" style=${{ padding: '3rem 1.5rem' }}>
                         <div class="empty-icon"><i data-lucide="history"></i></div>
                         <h3>No Logs Available</h3>
                         <p>No messages match your selected search filters.</p>
                     </div>
-                ` : logs.map(msg => html`<${HistoryTimelineItem} key=${msg.id} msg=${msg} />`)}
+                ` : filteredAndPaginated.paginatedLogs.map(msg => html`<${HistoryTimelineItem} key=${msg.id} msg=${msg} />`)}
             </div>
 
             <!-- Pagination -->
@@ -3987,17 +4006,21 @@ function SettingsPage() {
                     <div class="pref-settings-form">
                         <div class="form-group">
                             <label>Default LLM Model</label>
-                            <select value=${model} onChange=${e => { setModel(e.target.value); showToast(`Default model updated to ${e.target.value}!`); }}>
-                                <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile (Default)</option>
-                                <option value="llama-3.1-8b-instant">llama-3.1-8b-instant</option>
-                            </select>
+                            <div class="glass-select">
+                                <select value=${model} onChange=${e => { setModel(e.target.value); showToast(`Default model updated to ${e.target.value}!`); }}>
+                                    <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile (Default)</option>
+                                    <option value="llama-3.1-8b-instant">llama-3.1-8b-instant</option>
+                                </select>
+                            </div>
                         </div>
                         <div class="form-group">
                             <label>Visual Theme Mode</label>
-                            <select value=${theme} onChange=${e => setTheme(e.target.value)}>
-                                <option value="dark">Dark Theme (Standard)</option>
-                                <option value="light">Light Theme (SaaS)</option>
-                            </select>
+                            <div class="glass-select">
+                                <select value=${theme} onChange=${e => setTheme(e.target.value)}>
+                                    <option value="dark">Dark Theme (Standard)</option>
+                                    <option value="light">Light Theme (SaaS)</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -4022,7 +4045,7 @@ function AdminPage() {
             const [custRes, statsRes, diagRes] = await Promise.all([
                 ApiService.getCustomers(),
                 ApiService.getStats(),
-                fetch(`${API_BASE}/diagnostics`)
+                ApiService.getDiagnostics()
             ]);
 
             if (custRes.success) setCustomers(custRes.data || []);
@@ -4120,7 +4143,7 @@ function AdminPage() {
             </div>
 
             <!-- Bottom Grid (Activity stream, customers table, diagnostics) -->
-            <div class="dashboard-secondary-grid" style=${{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '2rem', marginBottom: '2rem' }}>
+            <div class="dashboard-secondary-grid">
                 <!-- Customers Table -->
                 <div class="admin-table-card glass-card">
                     <div class="admin-header-row">
@@ -4173,7 +4196,7 @@ function AdminPage() {
                     <h2>Live API Diagnostics Log</h2>
                     <span class="badge badge-emerald">Connected</span>
                 </div>
-                <div class="diagnostics-grid" style=${{ marginBottom: '1.5rem', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+                <div class="diagnostics-grid-admin">
                     <div class="diag-item">
                         <span class="diag-label">SDK Client Version</span>
                         <span class="diag-value">${diagnostics ? diagnostics.sdk_version : 'N/A'}</span>
@@ -4254,7 +4277,7 @@ function AboutPage() {
                 <h2 style=${{ fontSize: '1.5rem', marginBottom: '1.5rem', textAlign: 'center' }}>
                     Key Features
                 </h2>
-                <div class="settings-grid" style=${{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
+                <div class="settings-grid">
                     <div class="settings-section glass-card" style=${{ padding: '1.5rem' }}>
                         <div style=${{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '0.8rem' }}>
                             <div style=${{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(37, 99, 235, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-primary)' }}>

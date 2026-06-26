@@ -21,7 +21,7 @@ from app.models import db
 
 with app.app_context():
     db.create_all()
-    print("✅ Database tables created")
+    print("[SUCCESS] Database tables created")
     from app.seed.seed_tones import seed as seed_tones
     from app.seed.seed_occasions import seed as seed_occasions
     
