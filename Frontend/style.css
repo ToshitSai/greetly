@@ -4915,5 +4915,123 @@ html[data-theme="light"] .opaque-card {
     }
 }
 
+/* ============================================================
+   LIGHT MODE ACCESSIBILITY & CONTRAST OVERRIDES
+   ============================================================ */
+html[data-theme="light"] {
+    --glass-bg: rgba(255, 255, 255, 0.65) !important;
+    --glass-glow: rgba(37, 99, 235, 0.05) !important;
+    --glass-blur: 0px !important;
+    --glass-bg-opacity: 0.65 !important;
+}
+
+/* Light mode overrides for glassmorphic cards and containers */
+html[data-theme="light"] .glass-card {
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+html[data-theme="light"] .glass-card:hover {
+    border-color: rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Light mode overrides for dashboard metrics & analytics value gradients */
+html[data-theme="light"] .metric-value {
+    background: linear-gradient(to right, #0f172a, #334155) !important;
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+}
+
+/* Light mode overrides for statistics indicator trends */
+html[data-theme="light"] .metric-trend.info {
+    background: rgba(0, 0, 0, 0.03) !important;
+    border: 1px solid rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Light mode overrides for saved greeting message cards */
+html[data-theme="light"] .saved-message-card {
+    background: rgba(255, 255, 255, 0.65) !important;
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+html[data-theme="light"] .saved-message-card:hover {
+    border-color: rgba(37, 99, 235, 0.25) !important;
+}
+html[data-theme="light"] .saved-card-footer {
+    border-top: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Light mode overrides for action buttons and pagination inside cards */
+html[data-theme="light"] .btn-action-icon {
+    background: rgba(0, 0, 0, 0.02) !important;
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+html[data-theme="light"] .btn-secondary-outline,
+html[data-theme="light"] .btn-pagination {
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+html[data-theme="light"] .btn-secondary-outline:hover:not(:disabled),
+html[data-theme="light"] .btn-pagination:hover:not(:disabled) {
+    background: rgba(0, 0, 0, 0.04) !important;
+    border-color: rgba(0, 0, 0, 0.15) !important;
+}
+html[data-theme="light"] .btn-secondary-outline:disabled,
+html[data-theme="light"] .btn-pagination:disabled {
+    border-color: rgba(0, 0, 0, 0.03) !important;
+}
+
+/* Light mode overrides for tables and database views (Admin dashboard) */
+html[data-theme="light"] .admin-table th {
+    background: rgba(0, 0, 0, 0.03) !important;
+}
+html[data-theme="light"] .admin-table td {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05) !important;
+}
+html[data-theme="light"] .admin-table tr:hover td {
+    background: rgba(0, 0, 0, 0.015) !important;
+}
+
+/* Light mode overrides for sidebar borders & navigation item interactions */
+html[data-theme="light"] .sidebar {
+    border-right: 1px solid var(--border-color) !important;
+}
+html[data-theme="light"] .nav-link:hover {
+    background: rgba(0, 0, 0, 0.03) !important;
+}
+html[data-theme="light"] .nav-link.active {
+    background: rgba(0, 0, 0, 0.04) !important;
+}
+
+/* Light mode overrides for command palette and searchable modal lists */
+html[data-theme="light"] .palette-results::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.12) !important;
+}
+html[data-theme="light"] .palette-results::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.25) !important;
+}
+html[data-theme="light"] .palette-results {
+    scrollbar-color: rgba(0, 0, 0, 0.12) transparent !important;
+}
+
+/* General accessibility overrides for modal forms and temporary overlays */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.modal-container {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    padding: 2.5rem 2rem;
+    box-shadow: var(--shadow-xl);
+    color: var(--text-main);
+}
+html[data-theme="light"] .modal-container {
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+
 
 
