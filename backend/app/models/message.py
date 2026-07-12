@@ -37,6 +37,9 @@ class Message(db.Model):
             "recipient_id": self.recipient_id,
             "occasion_id": self.occasion_id,
             "tone_id": self.tone_id,
+            "recipient_name": getattr(self.recipient, 'name', None) if getattr(self, 'recipient', None) else None,
+            "occasion_name": getattr(self.occasion, 'name', None) if getattr(self, 'occasion', None) else None,
+            "tone_name": getattr(self.tone, 'name', None) if getattr(self, 'tone', None) else None,
             "relationship": self.relationship,
             "message_text": self.message_text,
             "status": self.status,
@@ -45,6 +48,6 @@ class Message(db.Model):
             "greeting_card_id": self.greeting_card_id,
             "version_number": self.version_number,
             "is_favorite": self.is_favorite,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None
+            "created_at": self.created_at.isoformat() + "Z" if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() + "Z" if self.updated_at else None
         }

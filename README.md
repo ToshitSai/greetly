@@ -1,18 +1,18 @@
-# WishForge
+# GiftAI
 
 **AI-Powered Personalized Greeting Message Generator**
 
-WishForge is a full-stack, AI-powered web application designed to generate highly personalized, context-aware greeting messages. By combining large language model intelligence with robust role mapping and structured validation, WishForge addresses the shortcomings of generic greeting templates, eliminates robotic cliché language, and resolves relationship perspective errors to produce authentic, human-like messages.
+GiftAI is a full-stack, AI-powered web application designed to generate highly personalized, context-aware greeting messages. By combining large language model intelligence with robust role mapping and structured validation, GiftAI addresses the shortcomings of generic greeting templates, eliminates robotic cliché language, and resolves relationship perspective errors to produce authentic, human-like messages.
 
 ---
 
 ## Project Overview
 
-WishForge was developed to bring personalization and emotional depth to digital greetings. The application leverages AI and structured metadata to build custom-tailored messages for a variety of relationships and occasions.
+GiftAI was developed to bring personalization and emotional depth to digital greetings. The application leverages AI and structured metadata to build custom-tailored messages for a variety of relationships and occasions.
 
-- **What WishForge is:** A web platform where users can generate, save, edit, and organize greeting card messages.
-- **The Problem It Solves:** Traditional greeting card generator tools write generic, cliché statements, and often reverse the perspective between sender and recipient (e.g., writing *from* a parent rather than *to* a parent). WishForge enforces deterministic role mapping to guarantee correct perspective and natural addressing.
-- **How AI is Used:** WishForge integrates with the **Groq API** (utilizing the high-performance `llama-3.3-70b-versatile` model) to construct customized cards on a single-request cycle. Prompt engineering prevents AI clichés (like *"I cherish our bond"*) and ensures natural, warm language.
+- **What GiftAI is:** A web platform where users can generate, save, edit, and organize greeting card messages.
+- **The Problem It Solves:** Traditional greeting card generator tools write generic, cliché statements, and often reverse the perspective between sender and recipient (e.g., writing *from* a parent rather than *to* a parent). GiftAI enforces deterministic role mapping to guarantee correct perspective and natural addressing.
+- **How AI is Used:** GiftAI integrates with the **Groq API** (utilizing the high-performance `llama-3.3-70b-versatile` model) to construct customized cards on a single-request cycle. Prompt engineering prevents AI clichés (like *"I cherish our bond"*) and ensures natural, warm language.
 - **Who Can Use the Application:** General users who want to craft meaningful messages for family, friends, colleagues, or managers; and Administrators who need to manage users, monitor database operations, track global stats, and view live API diagnostics.
 
 ---
@@ -52,7 +52,7 @@ WishForge was developed to bring personalization and emotional depth to digital 
 
 ## System Architecture
 
-The following diagram illustrates the flow of data through WishForge:
+The following diagram illustrates the flow of data through GiftAI:
 
 ```
 Frontend (React / Preact)
@@ -152,7 +152,7 @@ MySQL DB     Groq AI & Brevo SMTP
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/rohanpedapaga/giftai.git
+git clone https://github.com/Toshit/giftai.git
 cd giftai
 ```
 
@@ -207,10 +207,10 @@ DB_HOST=localhost
 DB_USER=root
 DB_PASSWORD=your_mysql_password
 DB_PORT=3306
-DB_NAME=wishforge_db
+DB_NAME=GiftAI_db
 
 # Admin User Initialization Credentials
-ADMIN_EMAIL=admin@wishforge.com
+ADMIN_EMAIL=admin@GiftAI.com
 ADMIN_PASSWORD=your_admin_password
 
 # Groq LLM API Credentials
@@ -218,15 +218,15 @@ GROQ_API_KEY=gsk_your_groq_api_key
 
 # Brevo (Sendinblue) Transactional Email Credentials
 BREVO_API_KEY=xkeysib-your_brevo_api_key
-BREVO_SENDER_EMAIL=sender@wishforge.com
-BREVO_SENDER_NAME=WishForge
+BREVO_SENDER_EMAIL=sender@GiftAI.com
+BREVO_SENDER_NAME=GiftAI
 ```
 
 ---
 
 ## Deployment
 
-WishForge is configured for production deployments:
+GiftAI is configured for production deployments:
 - **Frontend:** Hosted on **Vercel** as a static single-page application.
 - **Backend:** Hosted on **Render** (Python/Flask web service instance).
 - **Database:** Hosted on a managed **MySQL** database cluster.
@@ -303,8 +303,8 @@ WishForge is configured for production deployments:
 
 ## Author
 
-**Rohan Pedapaga**  
-[GitHub Profile](https://github.com/rohanpedapaga)
+**Toshit**  
+[GitHub Profile](https://github.com/Toshit)
 
 ---
 

@@ -60,6 +60,7 @@ def create_app(config_class=Config):
     from app.routes.tone_routes import tone_bp
     from app.routes.occasion_routes import occasion_bp
     from app.routes.dashboard_routes import dashboard_bp
+    from app.routes.email_routes import email_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(customer_bp, url_prefix='/api')
@@ -68,6 +69,7 @@ def create_app(config_class=Config):
     app.register_blueprint(tone_bp, url_prefix='/api')
     app.register_blueprint(occasion_bp, url_prefix='/api')
     app.register_blueprint(dashboard_bp, url_prefix='/api')
+    app.register_blueprint(email_bp, url_prefix='/api')
 
     # Basic server check route
     @app.route('/hello', methods=['GET'])

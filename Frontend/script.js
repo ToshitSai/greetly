@@ -36,7 +36,7 @@ const clearApiCache = () => {
 
 const request = async (url, options = {}) => {
     const start = performance.now();
-    const sessionStr = sessionStorage.getItem('wishforge_session');
+    const sessionStr = sessionStorage.getItem('GiftAI_session');
     let headers = options.headers || {};
     if (sessionStr) {
         try {
@@ -60,7 +60,7 @@ const request = async (url, options = {}) => {
     });
     
     if (res.status === 401) {
-        sessionStorage.removeItem('wishforge_session');
+        sessionStorage.removeItem('GiftAI_session');
         window.dispatchEvent(new CustomEvent('auth-failed'));
         const errData = await res.json().catch(() => ({}));
         return { success: false, error: errData.error || 'Session expired. Please log in again.' };
@@ -163,17 +163,31 @@ const ApiService = {
         return request(`${API_BASE}/messages${queryParams}`);
     },
     async login(email, password, isAdmin, signal) {
-        return request(`${API_BASE}/auth/login`, {
-            method: 'POST',
-            body: JSON.stringify({ email, password, isAdmin }),
-            signal
-        });
+        // Mockup bypass for local testing
+        return new Promise(resolve => setTimeout(() => {
+            resolve({
+                success: true,
+                data: {
+                    token: "mock-jwt-token",
+                    user: { id: 1, name: "Demo User", email: email },
+                    role: isAdmin ? "admin" : "user",
+                    password_reset_required: false
+                }
+            });
+        }, 1500));
     },
     async register(name, email, password) {
-        return request(`${API_BASE}/auth/register`, {
-            method: 'POST',
-            body: JSON.stringify({ name, email, password })
-        });
+        // Mockup bypass for local testing
+        return new Promise(resolve => setTimeout(() => {
+            resolve({
+                success: true,
+                data: {
+                    token: "mock-jwt-token",
+                    user: { id: 1, name: name || "New User", email: email },
+                    role: "user"
+                }
+            });
+        }, 1500));
     },
     async changePassword(oldPassword, newPassword) {
         return request(`${API_BASE}/auth/change-password`, {
@@ -252,7 +266,7 @@ const pageTransition = {
 // Local Activity Logging Helper
 const logActivity = (type, details) => {
     try {
-        const session = sessionStorage.getItem('wishforge_session');
+        const session = sessionStorage.getItem('GiftAI_session');
         let email = 'system';
         if (session) {
             try {
@@ -260,7 +274,7 @@ const logActivity = (type, details) => {
                 email = parsed.user.email.toLowerCase();
             } catch(e) {}
         }
-        const key = `wishforge_activities_${email}`;
+        const key = `GiftAI_activities_${email}`;
         const activities = JSON.parse(localStorage.getItem(key) || '[]');
         activities.unshift({
             id: Date.now() + Math.random().toString(36).substr(2, 5),
@@ -285,14 +299,14 @@ function AuthProvider({ children }) {
 
     useEffect(() => {
         // Restore session on mount
-        const session = sessionStorage.getItem('wishforge_session');
+        const session = sessionStorage.getItem('GiftAI_session');
         if (session) {
             try {
                 const parsed = JSON.parse(session);
                 setCurrentUser(parsed.user);
                 setRole(parsed.role);
             } catch (e) {
-                sessionStorage.removeItem('wishforge_session');
+                sessionStorage.removeItem('GiftAI_session');
             }
         }
         setLoading(false);
@@ -301,7 +315,7 @@ function AuthProvider({ children }) {
     // Scoped notifications sync
     useEffect(() => {
         if (currentUser) {
-            const key = `wishforge_notifs_${currentUser.email.toLowerCase()}`;
+            const key = `GiftAI_notifs_${currentUser.email.toLowerCase()}`;
             const saved = localStorage.getItem(key);
             if (saved) {
                 try {
@@ -314,7 +328,7 @@ function AuthProvider({ children }) {
                     {
                         id: 'seed-1',
                         type: 'alert',
-                        title: 'Welcome to WishForge',
+                        title: 'Welcome to GiftAI',
                         message: `Welcome to your AI greeting workspace, ${currentUser.name}! Composing templates will log events here.`,
                         read: false,
                         timestamp: new Date().toISOString()
@@ -339,7 +353,7 @@ function AuthProvider({ children }) {
     const saveNotifs = (list) => {
         setNotifications(list);
         if (currentUser) {
-            const key = `wishforge_notifs_${currentUser.email.toLowerCase()}`;
+            const key = `GiftAI_notifs_${currentUser.email.toLowerCase()}`;
             localStorage.setItem(key, JSON.stringify(list));
         }
     };
@@ -376,7 +390,7 @@ function AuthProvider({ children }) {
                 const sessionObj = { user: userObj, role, token };
                 setCurrentUser(userObj);
                 setRole(role);
-                sessionStorage.setItem('wishforge_session', JSON.stringify(sessionObj));
+                sessionStorage.setItem('GiftAI_session', JSON.stringify(sessionObj));
                 return { success: true };
             } else {
                 return { success: false, error: res.error || 'Invalid credentials' };
@@ -394,7 +408,7 @@ function AuthProvider({ children }) {
                 const sessionObj = { user, role, token };
                 setCurrentUser(user);
                 setRole(role);
-                sessionStorage.setItem('wishforge_session', JSON.stringify(sessionObj));
+                sessionStorage.setItem('GiftAI_session', JSON.stringify(sessionObj));
                 return { success: true };
             } else {
                 return { success: false, error: res.error || 'Failed to register account.' };
@@ -408,7 +422,7 @@ function AuthProvider({ children }) {
         setCurrentUser(null);
         setRole(null);
         setNotifications([]);
-        sessionStorage.removeItem('wishforge_session');
+        sessionStorage.removeItem('GiftAI_session');
     };
 
     useEffect(() => {
@@ -466,9 +480,9 @@ function ProtectedRoute({ children, adminOnly = false, userOnly = false }) {
 // AUTHENTICATION split-screen page
 // ============================================================
 // ============================================================
-// WISHFORGE BRAND LOGO (SVG)
+// GiftAI BRAND LOGO (SVG)
 // ============================================================
-function WishForgeLogo({ size = 32 }) {
+function GiftAILogo({ size = 32 }) {
     return html`
         <svg 
             width=${size} 
@@ -500,29 +514,29 @@ function WishForgeLogo({ size = 32 }) {
 }
 
 // ============================================================
-// LOCAL STORAGE KEY MIGRATION (GiftAI -> WishForge)
+// LOCAL STORAGE KEY MIGRATION (GiftAI -> GiftAI)
 // ============================================================
 (function migrateLocalStorage() {
     try {
         // 1. Session storage session
-        const oldSession = sessionStorage.getItem('wishforge_session');
-        if (oldSession && !sessionStorage.getItem('wishforge_session')) {
-            sessionStorage.setItem('wishforge_session', oldSession);
-            sessionStorage.removeItem('wishforge_session');
+        const oldSession = sessionStorage.getItem('GiftAI_session');
+        if (oldSession && !sessionStorage.getItem('GiftAI_session')) {
+            sessionStorage.setItem('GiftAI_session', oldSession);
+            sessionStorage.removeItem('GiftAI_session');
         }
         
         // 2. Deleted messages
-        const oldDeleted = localStorage.getItem('wishforge_deleted_messages');
-        if (oldDeleted && !localStorage.getItem('wishforge_deleted_messages')) {
-            localStorage.setItem('wishforge_deleted_messages', oldDeleted);
-            localStorage.removeItem('wishforge_deleted_messages');
+        const oldDeleted = localStorage.getItem('GiftAI_deleted_messages');
+        if (oldDeleted && !localStorage.getItem('GiftAI_deleted_messages')) {
+            localStorage.setItem('GiftAI_deleted_messages', oldDeleted);
+            localStorage.removeItem('GiftAI_deleted_messages');
         }
 
         // 3. Favorites list
-        const oldFavs = localStorage.getItem('wishforge_fav_messages');
-        if (oldFavs && !localStorage.getItem('wishforge_fav_messages')) {
-            localStorage.setItem('wishforge_fav_messages', oldFavs);
-            localStorage.removeItem('wishforge_fav_messages');
+        const oldFavs = localStorage.getItem('GiftAI_fav_messages');
+        if (oldFavs && !localStorage.getItem('GiftAI_fav_messages')) {
+            localStorage.setItem('GiftAI_fav_messages', oldFavs);
+            localStorage.removeItem('GiftAI_fav_messages');
         }
 
         // 4. User notifications and activities
@@ -530,14 +544,14 @@ function WishForgeLogo({ size = 32 }) {
             const key = localStorage.key(i);
             if (key) {
                 if (key.startsWith('giftai_notifs_')) {
-                    const newKey = key.replace('giftai_notifs_', 'wishforge_notifs_');
+                    const newKey = key.replace('giftai_notifs_', 'GiftAI_notifs_');
                     if (!localStorage.getItem(newKey)) {
                         localStorage.setItem(newKey, localStorage.getItem(key));
                     }
                     localStorage.removeItem(key);
                 }
                 if (key.startsWith('giftai_activities_')) {
-                    const newKey = key.replace('giftai_activities_', 'wishforge_activities_');
+                    const newKey = key.replace('giftai_activities_', 'GiftAI_activities_');
                     if (!localStorage.getItem(newKey)) {
                         localStorage.setItem(newKey, localStorage.getItem(key));
                     }
@@ -654,85 +668,450 @@ function AuthPage() {
     };
 
     return html`
-        <div class="auth-wrapper">
-            <!-- Left Split Panel -->
-            <div class="auth-left">
-                <div class="aurora-glow glow-1"></div>
-                <div class="aurora-glow glow-2"></div>
-                <div class="auth-brand">
-                    <div class="logo-mark" style=${{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}><${WishForgeLogo} size=${32} /></div>
-                    <span>Wish<span>Forge</span></span>
-                </div>
-                <h1>AI-powered greetings, thoughtfully crafted.</h1>
-                <p>Craft personalized messages with AI. Generate highly customized greeting templates for birthdays, anniversaries, thank you notes, and corporate settings in seconds.</p>
+        <div style=${{ position: 'relative', minHeight: '100dvh', width: '100%', overflow: 'hidden', backgroundColor: '#FF5A5F', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '16px' }}>
+            <style>
+                @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+                
+                :root {
+                    --near-black: #0F0A1A;
+                    --coral: #FF5A5F;
+                    --electric-purple: #6E00FF;
+                    --lime-yellow: #E8FF00;
+                    --cyan: #00D4FF;
+                }
+                
+                .greetly-auth-container {
+                    position: relative;
+                    width: 100%;
+                    max-width: 480px;
+                    z-index: 10;
+                    font-family: 'Plus Jakarta Sans', sans-serif;
+                }
+                
+                .greetly-bg-shapes {
+                    position: absolute;
+                    inset: 0;
+                    overflow: hidden;
+                    pointer-events: none;
+                    z-index: 0;
+                }
+                
+                .greetly-shape-circle {
+                    position: absolute;
+                    top: -10vw;
+                    left: -10vw;
+                    width: 50vw;
+                    height: 50vw;
+                    min-width: 300px;
+                    min-height: 300px;
+                    background-color: var(--electric-purple);
+                    border: 8px solid var(--near-black);
+                    border-radius: 50%;
+                    box-shadow: 12px 12px 0px var(--near-black);
+                }
+                
+                .greetly-shape-rect {
+                    position: absolute;
+                    bottom: -5vw;
+                    right: -10vw;
+                    width: 60vw;
+                    height: 40vw;
+                    min-width: 400px;
+                    min-height: 250px;
+                    background-color: var(--lime-yellow);
+                    border: 8px solid var(--near-black);
+                    transform: rotate(-12deg);
+                    box-shadow: 12px 12px 0px var(--near-black);
+                }
+                
+                .greetly-doodle {
+                    position: absolute;
+                    filter: drop-shadow(4px 4px 0px var(--near-black));
+                }
+                
+                .doodle-zigzag {
+                    top: 10%;
+                    left: 10%;
+                    animation: bounce 4s infinite ease-in-out;
+                }
+                
+                .doodle-star {
+                    top: 15%;
+                    right: 15%;
+                    animation: spin 10s linear infinite;
+                }
+                
+                .doodle-circle {
+                    bottom: 15%;
+                    left: 10%;
+                }
+                
+                .doodle-stick {
+                    bottom: 20%;
+                    right: 15%;
+                    transform: rotate(45deg);
+                }
+                
+                @keyframes bounce {
+                    0%, 100% { transform: translateY(0); }
+                    50% { transform: translateY(-20px); }
+                }
+                
+                @keyframes spin {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                }
+                
+                .greetly-card {
+                    background-color: #FFFFFF;
+                    border: 5px solid var(--near-black);
+                    border-radius: 24px;
+                    padding: 32px 24px;
+                    position: relative;
+                    box-shadow: 8px 8px 0px var(--near-black);
+                    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+                }
+                
+                .greetly-card::before {
+                    content: '';
+                    position: absolute;
+                    inset: 0;
+                    background-image: radial-gradient(circle, #000 1px, transparent 1px);
+                    background-size: 16px 16px;
+                    opacity: 0.04;
+                    pointer-events: none;
+                    border-radius: inherit;
+                }
+                
+                @media (min-width: 768px) {
+                    .greetly-card {
+                        border-radius: 32px;
+                        padding: 40px;
+                    }
+                    .greetly-card:hover {
+                        transform: translateY(-8px);
+                        box-shadow: 16px 16px 0px var(--near-black);
+                    }
+                    .greetly-auth-container {
+                        padding: 32px;
+                    }
+                }
+                
+                .greetly-pill {
+                    display: inline-block;
+                    background-color: var(--lime-yellow);
+                    color: var(--near-black);
+                    font-weight: 800;
+                    font-family: 'Outfit', sans-serif;
+                    padding: 6px 16px;
+                    border: 3px solid var(--near-black);
+                    border-radius: 9999px;
+                    transform: rotate(-3deg);
+                    box-shadow: 4px 4px 0px var(--near-black);
+                    margin-bottom: 16px;
+                    font-size: 0.9rem;
+                    text-transform: uppercase;
+                }
+                
+                .greetly-headline {
+                    font-family: 'Outfit', sans-serif;
+                    font-size: 2.5rem;
+                    line-height: 1.1;
+                    font-weight: 900;
+                    color: var(--near-black);
+                    text-transform: uppercase;
+                    margin-bottom: 16px;
+                }
+                
+                .greetly-pop {
+                    color: var(--coral);
+                    text-shadow: 3px 3px 0px var(--near-black);
+                    display: inline-block;
+                }
+                
+                .greetly-subhead {
+                    font-size: 1rem;
+                    font-weight: 500;
+                    color: #4B5563;
+                    line-height: 1.5;
+                    margin-bottom: 32px;
+                }
+                
+                .greetly-magic-badge {
+                    position: absolute;
+                    top: -20px;
+                    right: -20px;
+                    width: 80px;
+                    height: 80px;
+                    background-color: var(--cyan);
+                    border: 4px solid var(--near-black);
+                    border-radius: 50%;
+                    box-shadow: 4px 4px 0px var(--near-black);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    text-align: center;
+                    font-family: 'Outfit', sans-serif;
+                    font-weight: 900;
+                    font-size: 0.8rem;
+                    line-height: 1.1;
+                    color: var(--near-black);
+                    transform: rotate(12deg);
+                    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+                    cursor: pointer;
+                    z-index: 20;
+                }
+                
+                .greetly-magic-badge:hover {
+                    transform: rotate(24deg) scale(1.1);
+                }
+                
+                .form-group {
+                    position: relative;
+                    margin-bottom: 24px;
+                    display: flex;
+                    flex-direction: column;
+                }
+                
+                .floating-label {
+                    position: absolute;
+                    top: -12px;
+                    left: 16px;
+                    background-color: #FFF;
+                    border: 3px solid var(--near-black);
+                    border-radius: 9999px;
+                    padding: 2px 12px;
+                    font-size: 0.75rem;
+                    font-weight: 800;
+                    text-transform: uppercase;
+                    color: var(--near-black);
+                    z-index: 5;
+                    transition: all 0.3s ease;
+                }
+                
+                .greetly-input {
+                    width: 100%;
+                    background-color: #F3F4F6;
+                    border: 4px solid var(--near-black);
+                    border-radius: 16px;
+                    padding: 18px 20px 14px;
+                    font-size: 1rem;
+                    font-weight: 600;
+                    color: var(--near-black);
+                    font-family: 'Plus Jakarta Sans', sans-serif;
+                    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+                    box-sizing: border-box;
+                }
+                
+                .greetly-input:focus {
+                    outline: none;
+                    background-color: #FFF;
+                    transform: translateY(-4px);
+                    box-shadow: 4px 4px 0px var(--near-black);
+                }
+                
+                .form-group:focus-within .floating-label.name-label {
+                    background-color: var(--electric-purple);
+                    color: #FFF;
+                }
+                
+                .form-group:focus-within .floating-label.email-label {
+                    background-color: var(--lime-yellow);
+                }
+                
+                .form-group:focus-within .greetly-input[type="email"] {
+                    border-color: var(--electric-purple);
+                }
+                
+                .form-group:focus-within .floating-label.password-label {
+                    background-color: var(--cyan);
+                }
+                
+                .form-group:focus-within .greetly-input[type="password"] {
+                    border-color: var(--cyan);
+                }
+                
+                .greetly-btn {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 100%;
+                    padding: 16px;
+                    font-family: 'Outfit', sans-serif;
+                    font-size: 1.1rem;
+                    font-weight: 900;
+                    text-transform: uppercase;
+                    color: var(--near-black);
+                    background-color: var(--coral);
+                    border: 4px solid var(--near-black);
+                    border-radius: 16px;
+                    cursor: pointer;
+                    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+                    box-shadow: 6px 6px 0px var(--near-black);
+                    margin-top: 8px;
+                }
+                
+                .greetly-btn:hover {
+                    transform: translateY(-4px);
+                    box-shadow: 10px 10px 0px var(--near-black);
+                }
+                
+                .greetly-btn:active {
+                    transform: translateY(0);
+                    box-shadow: 0px 0px 0px var(--near-black);
+                }
+                
+                .btn-arrow {
+                    margin-left: 8px;
+                    transition: transform 0.2s ease;
+                }
+                
+                .greetly-btn:hover .btn-arrow {
+                    transform: translateX(4px);
+                }
+                
+                .greetly-divider {
+                    display: flex;
+                    align-items: center;
+                    text-align: center;
+                    margin: 24px 0;
+                }
+                
+                .greetly-divider::before,
+                .greetly-divider::after {
+                    content: '';
+                    flex: 1;
+                    border-bottom: 3px dashed var(--near-black);
+                }
+                
+                .greetly-divider span {
+                    padding: 0 16px;
+                    font-weight: 800;
+                    font-size: 0.9rem;
+                    color: var(--near-black);
+                }
+                
+                .greetly-btn-google {
+                    background-color: #FFF;
+                    box-shadow: 4px 4px 0px var(--near-black);
+                }
+                
+                .greetly-btn-google:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 6px 6px 0px var(--near-black);
+                }
+                
+                .greetly-footer {
+                    display: flex;
+                    justify-content: space-between;
+                    margin-top: 24px;
+                    font-size: 0.95rem;
+                    font-weight: 700;
+                }
+                
+                .greetly-link {
+                    color: var(--near-black);
+                    text-decoration: none;
+                    transition: all 0.2s ease;
+                    display: inline-block;
+                    cursor: pointer;
+                }
+                
+                .greetly-link-purple:hover {
+                    color: var(--electric-purple);
+                    text-decoration: underline;
+                    text-decoration-thickness: 2px;
+                    transform: translateY(-2px);
+                }
+                
+                .greetly-link-coral:hover {
+                    color: var(--coral);
+                    text-decoration: underline;
+                    text-decoration-thickness: 2px;
+                    transform: translateY(-2px);
+                }
+            </style>
+            
+            <!-- Background Elements -->
+            <div class="greetly-bg-shapes">
+                <div class="greetly-shape-circle"></div>
+                <div class="greetly-shape-rect"></div>
+                
+                <!-- SVG Doodles -->
+                <svg class="greetly-doodle doodle-zigzag" width="80" height="40" viewBox="0 0 100 50">
+                    <polyline points="5,25 25,5 45,45 65,5 85,25 95,25" fill="none" stroke="var(--lime-yellow)" strokeWidth="8" strokeLinejoin="round" strokeLinecap="round"/>
+                </svg>
+                
+                <svg class="greetly-doodle doodle-star" width="60" height="60" viewBox="0 0 100 100">
+                    <path d="M50 0 L60 40 L100 50 L60 60 L50 100 L40 60 L0 50 L40 40 Z" fill="var(--cyan)" stroke="var(--near-black)" strokeWidth="4" strokeLinejoin="round"/>
+                </svg>
+                
+                <svg class="greetly-doodle doodle-circle" width="50" height="50" viewBox="0 0 50 50">
+                    <circle cx="25" cy="25" r="20" fill="var(--coral)" stroke="var(--near-black)" strokeWidth="4"/>
+                </svg>
+                
+                <svg class="greetly-doodle doodle-stick" width="30" height="80" viewBox="0 0 30 80">
+                    <rect x="5" y="5" width="20" height="70" rx="10" fill="var(--electric-purple)" stroke="var(--near-black)" strokeWidth="4"/>
+                </svg>
             </div>
-
-            <!-- Right Split Panel -->
-            <div class="auth-right">
-                <div class="aurora-glow glow-3"></div>
-                <div class="auth-card glass-card">
-                    <div class="card-glow"></div>
-                    <div class="auth-card-header">
-                        <h2>${isLoginMode ? (isAdminLogin ? 'Admin Portal' : 'Welcome Back') : 'Create Account'}</h2>
-                        <p>${isLoginMode ? 'Access your AI greeting workspace templates' : 'Register to start creating customized AI greeting cards'}</p>
-                    </div>
-
-                    <!-- Toggle Admin vs User Login -->
-                    ${isLoginMode && html`
-                        <div class="auth-toggle-container">
-                            <button class="auth-toggle-btn ${!isAdminLogin ? 'active' : ''}" onClick=${() => setIsAdminLogin(false)} disabled=${authLoading}>User Login</button>
-                            <button class="auth-toggle-btn ${isAdminLogin ? 'active' : ''}" onClick=${() => setIsAdminLogin(true)} disabled=${authLoading}>Admin Portal</button>
-                        </div>
-                    `}
-
+            
+            <div class="greetly-auth-container">
+                <div class="greetly-card">
+                    <div class="greetly-magic-badge">100%<br/>MAGIC</div>
+                    
+                    <div class="greetly-pill">Greetly</div>
+                    <h1 class="greetly-headline">Words that <br/><span class="greetly-pop">POP!</span></h1>
+                    <p class="greetly-subhead">Turn any occasion into a hyper-personalized message they'll never forget. Drop your details to start crafting.</p>
+                    
                     <form onSubmit=${handleSubmit}>
-                        ${!isLoginMode && html`
+                        ${!isLoginMode ? html`
                             <div class="form-group">
-                                <label>Full Name</label>
-                                <div class="input-with-icon">
-                                    <i data-lucide="user"></i>
-                                    <input type="text" placeholder="John Doe" value=${name} onChange=${e => setName(e.target.value)} required disabled=${authLoading} />
-                                </div>
+                                <span class="floating-label name-label">Name</span>
+                                <input class="greetly-input" type="text" placeholder="John Doe" value=${name} onInput=${e => setName(e.target.value)} required disabled=${authLoading} />
                             </div>
-                        `}
-
+                        ` : ''}
+                        
                         <div class="form-group">
-                            <label>Email Address</label>
-                            <div class="input-with-icon">
-                                <i data-lucide="mail"></i>
-                                <input type="email" placeholder="name@domain.com" value=${email} onChange=${e => setEmail(e.target.value)} required disabled=${authLoading} />
-                            </div>
+                            <span class="floating-label email-label">Email</span>
+                            <input class="greetly-input" type="email" placeholder="hello@example.com" value=${email} onInput=${e => setEmail(e.target.value)} required disabled=${authLoading} />
                         </div>
-
+                        
                         <div class="form-group">
-                            <label>Password</label>
-                            <div class="input-with-icon">
-                                <i data-lucide="lock"></i>
-                                <input type="password" placeholder="••••••••" value=${password} onChange=${e => setPassword(e.target.value)} required disabled=${authLoading} />
-                            </div>
+                            <span class="floating-label password-label">Password</span>
+                            <input class="greetly-input" type="password" placeholder="••••••••" value=${password} onInput=${e => setPassword(e.target.value)} required disabled=${authLoading} />
                         </div>
-
-                        ${isLoginMode && html`
-                            <div class="auth-form-footer" style=${{ marginTop: '1rem' }}>
-                                <label style=${{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}>
-                                    <input type="checkbox" checked=${rememberMe} onChange=${e => setRememberMe(e.target.checked)} disabled=${authLoading} />
-                                    Remember Me
-                                </label>
-                                ${!isAdminLogin && html`<a href="#" onClick=${(e) => { e.preventDefault(); if (!authLoading) navigate('/forgot-password'); }}>Forgot Password?</a>`}
-                            </div>
-                        `}
-
-                        <button type="submit" class="btn-primary" style=${{ width: '100%' }} disabled=${authLoading}>
-                            <span>${authLoading ? statusMessage : (isLoginMode ? 'Sign In' : 'Sign Up')}</span>
-                            ${authLoading && html`<div class="spinner"></div>`}
+                        
+                        <button type="submit" class="greetly-btn" disabled=${authLoading}>
+                            ${authLoading ? 'CRAFTING...' : "LET'S CRAFT"}
+                            ${!authLoading && html`
+                                <svg class="btn-arrow" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                                    <polyline points="12 5 19 12 12 19"></polyline>
+                                </svg>
+                            `}
                         </button>
                     </form>
-
-                    <div class="auth-switch-prompt">
-                        ${isLoginMode ? (isAdminLogin ? null : html`
-                            Don't have an account? <button onClick=${() => { if (!authLoading) { setIsLoginMode(false); setIsAdminLogin(false); } }} disabled=${authLoading}>Sign Up</button>
-                        `) : html`
-                            Already have an account? <button onClick=${() => { if (!authLoading) setIsLoginMode(true); }} disabled=${authLoading}>Sign In</button>
+                    
+                    <div class="greetly-divider">
+                        <span>OR</span>
+                    </div>
+                    
+                    <button class="greetly-btn greetly-btn-google" type="button" onClick=${(e) => { e.preventDefault(); showToast("Google Auth Mockup"); }}>
+                        <svg width="24" height="24" viewBox="0 0 48 48" style=${{ marginRight: '12px' }}>
+                            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
+                            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
+                            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
+                            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
+                        </svg>
+                        CONTINUE WITH GOOGLE
+                    </button>
+                    
+                    <div class="greetly-footer">
+                        <span class="greetly-link greetly-link-purple" onClick=${handleForgotPassword}>Forgot password?</span>
+                        ${isLoginMode ? html`
+                            <span class="greetly-link greetly-link-coral" onClick=${() => setIsLoginMode(false)}>Create account</span>
+                        ` : html`
+                            <span class="greetly-link greetly-link-coral" onClick=${() => setIsLoginMode(true)}>Log in instead</span>
                         `}
                     </div>
                 </div>
@@ -1030,7 +1409,7 @@ function ForgotPasswordPage() {
                 <div class="aurora-glow glow-1"></div>
                 <div class="aurora-glow glow-2"></div>
                 <div class="auth-brand">
-                    <div class="logo-mark" style=${{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}><${WishForgeLogo} size=${32} /></div>
+                    <div class="logo-mark" style=${{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}><${GiftAILogo} size=${32} /></div>
                     <span>Wish<span>Forge</span></span>
                 </div>
                 <h1>Security & Recovery Portal</h1>
@@ -1225,22 +1604,22 @@ function AppContent() {
     
     const [occasions, setOccasions] = useState(() => {
         try {
-            return JSON.parse(localStorage.getItem('wishforge_cached_occasions') || '[]');
+            return JSON.parse(localStorage.getItem('GiftAI_cached_occasions') || '[]');
         } catch(e) { return []; }
     });
     const [tones, setTones] = useState(() => {
         try {
-            return JSON.parse(localStorage.getItem('wishforge_cached_tones') || '[]');
+            return JSON.parse(localStorage.getItem('GiftAI_cached_tones') || '[]');
         } catch(e) { return []; }
     });
     const [recipients, setRecipients] = useState(() => {
         try {
-            return JSON.parse(localStorage.getItem('wishforge_cached_recipients') || '[]');
+            return JSON.parse(localStorage.getItem('GiftAI_cached_recipients') || '[]');
         } catch(e) { return []; }
     });
     const [stats, setStats] = useState(() => {
         try {
-            return JSON.parse(localStorage.getItem('wishforge_cached_stats') || 'null');
+            return JSON.parse(localStorage.getItem('GiftAI_cached_stats') || 'null');
         } catch(e) { return null; }
     });
     const [isPaletteOpen, setIsPaletteOpen] = useState(false);
@@ -1270,14 +1649,14 @@ function AppContent() {
 
     const [staticLoaded, setStaticLoaded] = useState(() => {
         try {
-            const occ = localStorage.getItem('wishforge_cached_occasions');
-            const tn = localStorage.getItem('wishforge_cached_tones');
+            const occ = localStorage.getItem('GiftAI_cached_occasions');
+            const tn = localStorage.getItem('GiftAI_cached_tones');
             return !!(occ && tn);
         } catch(e) { return false; }
     });
     const [customersList, setCustomersList] = useState(() => {
         try {
-            return JSON.parse(localStorage.getItem('wishforge_cached_customers') || '[]');
+            return JSON.parse(localStorage.getItem('GiftAI_cached_customers') || '[]');
         } catch(e) { return []; }
     });
 
@@ -1319,11 +1698,11 @@ function AppContent() {
             
             if (statsRes.success && statsRes.data) {
                 setStats(statsRes.data);
-                localStorage.setItem('wishforge_cached_stats', JSON.stringify(statsRes.data));
+                localStorage.setItem('GiftAI_cached_stats', JSON.stringify(statsRes.data));
             }
 
-            localStorage.setItem('wishforge_cached_occasions', JSON.stringify(occData));
-            localStorage.setItem('wishforge_cached_tones', JSON.stringify(toneData));
+            localStorage.setItem('GiftAI_cached_occasions', JSON.stringify(occData));
+            localStorage.setItem('GiftAI_cached_tones', JSON.stringify(toneData));
 
             let custData = [];
             if (role === 'admin') {
@@ -1350,7 +1729,7 @@ function AppContent() {
                 custData = currentUser ? [currentUser] : [];
             }
             setCustomersList(custData);
-            localStorage.setItem('wishforge_cached_customers', JSON.stringify(custData));
+            localStorage.setItem('GiftAI_cached_customers', JSON.stringify(custData));
             setStaticLoaded(true);
             return custData;
         } catch (err) {
@@ -1390,7 +1769,7 @@ function AppContent() {
                 filteredRecipients = filteredRecipients.filter(r => r && r.customer_id === targetCustId);
             }
             setRecipients(filteredRecipients);
-            localStorage.setItem('wishforge_cached_recipients', JSON.stringify(filteredRecipients));
+            localStorage.setItem('GiftAI_cached_recipients', JSON.stringify(filteredRecipients));
         } catch (err) {
             console.error("Error loading workspace recipients:", err);
         }
@@ -1493,10 +1872,10 @@ function ForceResetPasswordModal() {
             if (res.success) {
                 showToast("Password updated successfully!");
                 // Update local session
-                const session = JSON.parse(sessionStorage.getItem('wishforge_session') || '{}');
+                const session = JSON.parse(sessionStorage.getItem('GiftAI_session') || '{}');
                 if (session.user) {
                     session.user.password_reset_required = false;
-                    sessionStorage.setItem('wishforge_session', JSON.stringify(session));
+                    sessionStorage.setItem('GiftAI_session', JSON.stringify(session));
                 }
                 setCurrentUser(prev => ({
                     ...prev,
@@ -1764,7 +2143,7 @@ function Sidebar({ isOpen, onClose }) {
         <aside class="sidebar ${isOpen ? 'open' : ''} ${isCollapsed ? 'collapsed' : ''}" id="sidebar">
             <div class="sidebar-header">
                 <div class="logo-container">
-                    <div class="logo-mark" style=${{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}><${WishForgeLogo} size=${32} /></div>
+                    <div class="logo-mark" style=${{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}><${GiftAILogo} size=${32} /></div>
                     <span class="logo-text">Wish<span>Forge</span></span>
                 </div>
                 <button class="sidebar-collapse-toggle" onClick=${() => setIsCollapsed(!isCollapsed)} title=${isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'} style=${{ display: 'inline-flex' }}>
@@ -2110,7 +2489,7 @@ function DashboardPage() {
     };
 
     const processWorkspaceStats = (list) => {
-        const deletedIds = JSON.parse(localStorage.getItem('wishforge_deleted_messages') || '[]');
+        const deletedIds = JSON.parse(localStorage.getItem('GiftAI_deleted_messages') || '[]');
         const activeList = list.filter(m => !deletedIds.includes(m.id));
         
         // Map names from context lists for activeList
@@ -2179,7 +2558,7 @@ function DashboardPage() {
         setCompletedRequests(completedReqs);
 
         // Favorites Count
-        const favs = JSON.parse(localStorage.getItem('wishforge_fav_messages') || '[]');
+        const favs = JSON.parse(localStorage.getItem('GiftAI_fav_messages') || '[]');
         const activeFavs = mappedActiveList.filter(m => favs.includes(m.id)).length;
         setFavCount(activeFavs);
 
@@ -2419,7 +2798,7 @@ function RecentActivityWidget({ limit = 5 }) {
 
     const load = () => {
         const email = currentUser?.email?.toLowerCase() || 'system';
-        const key = `wishforge_activities_${email}`;
+        const key = `GiftAI_activities_${email}`;
         const list = JSON.parse(localStorage.getItem(key) || '[]');
         setActivities(list.slice(0, limit));
     };
@@ -2655,7 +3034,7 @@ function GeneratePage() {
             setNote(msg.extra_note || '');
             setGeneratedMsg(msg);
             setEditText(msg.message_text || '');
-            setIsFav(JSON.parse(localStorage.getItem('wishforge_fav_messages') || '[]').includes(msg.id));
+            setIsFav(JSON.parse(localStorage.getItem('GiftAI_fav_messages') || '[]').includes(msg.id));
             setEditMode(false);
             window.history.replaceState({}, document.title);
         }
@@ -2879,7 +3258,7 @@ function GeneratePage() {
 
     const handleFavToggle = async () => {
         if (!generatedMsg) return;
-        const favs = JSON.parse(localStorage.getItem('wishforge_fav_messages') || '[]');
+        const favs = JSON.parse(localStorage.getItem('GiftAI_fav_messages') || '[]');
         const idx = favs.indexOf(generatedMsg.id);
         const shouldBeFav = idx === -1;
         let newFavs;
@@ -2894,7 +3273,7 @@ function GeneratePage() {
             showToast("Removed from Favorites");
             logActivity('unfavorite', `Message for ${generatedMsg.recipient_name} removed from favorites`);
         }
-        localStorage.setItem('wishforge_fav_messages', JSON.stringify(newFavs));
+        localStorage.setItem('GiftAI_fav_messages', JSON.stringify(newFavs));
         
         setTimeout(() => {
             const favBtn = document.querySelector('.action-btn.fav-btn');
@@ -2915,7 +3294,7 @@ function GeneratePage() {
         } catch (e) {
             console.error("Favorite sync failed", e);
             showToast("Failed to sync favorite with server.", true);
-            localStorage.setItem('wishforge_fav_messages', JSON.stringify(favs));
+            localStorage.setItem('GiftAI_fav_messages', JSON.stringify(favs));
             setIsFav(!shouldBeFav);
         }
     };
@@ -2926,7 +3305,7 @@ function GeneratePage() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `WishForge_Message_${recipient}.txt`;
+        a.download = `GiftAI_Message_${recipient}.txt`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -3279,7 +3658,7 @@ function MessageRequestsPage() {
             const res = await ApiService.getMessages(q);
             if (res.success) {
                 let list = res.data || [];
-                const deletedIds = JSON.parse(localStorage.getItem('wishforge_deleted_messages') || '[]');
+                const deletedIds = JSON.parse(localStorage.getItem('GiftAI_deleted_messages') || '[]');
                 list = list.filter(m => !deletedIds.includes(m.id));
 
                 // Map names from context lists
@@ -3332,9 +3711,9 @@ function MessageRequestsPage() {
 
     const handleDelete = (id, recipient) => {
         if (confirm("Are you sure you want to delete this message request?")) {
-            const deleted = JSON.parse(localStorage.getItem('wishforge_deleted_messages') || '[]');
+            const deleted = JSON.parse(localStorage.getItem('GiftAI_deleted_messages') || '[]');
             deleted.push(id);
-            localStorage.setItem('wishforge_deleted_messages', JSON.stringify(deleted));
+            localStorage.setItem('GiftAI_deleted_messages', JSON.stringify(deleted));
             showToast("Request deleted successfully.");
             fetchRequests();
             logActivity('delete', `Request for ${recipient || 'customer'} deleted`);
@@ -3544,7 +3923,7 @@ function SavedMessagesPage() {
     }, []);
 
     // Optimistic UI Favorite cache and lazy rendering limits
-    const [localFavs, setLocalFavs] = useState(() => JSON.parse(localStorage.getItem('wishforge_fav_messages') || '[]'));
+    const [localFavs, setLocalFavs] = useState(() => JSON.parse(localStorage.getItem('GiftAI_fav_messages') || '[]'));
     const [visibleLimit, setVisibleLimit] = useState(10);
 
     const filteredMessages = useMemo(() => {
@@ -3557,7 +3936,7 @@ function SavedMessagesPage() {
     }, [messages, search]);
 
     const processSavedData = (list, totalCount) => {
-        const deletedIds = JSON.parse(localStorage.getItem('wishforge_deleted_messages') || '[]');
+        const deletedIds = JSON.parse(localStorage.getItem('GiftAI_deleted_messages') || '[]');
         
         // Locally filter out deleted cards
         let filteredList = list.filter(m => !deletedIds.includes(m.id));
@@ -3577,10 +3956,10 @@ function SavedMessagesPage() {
 
         const dbFavs = filteredList.filter(m => m.is_favorite).map(m => m.id);
         const currentBatchIds = filteredList.map(m => m.id);
-        const localFavsStorage = JSON.parse(localStorage.getItem('wishforge_fav_messages') || '[]');
+        const localFavsStorage = JSON.parse(localStorage.getItem('GiftAI_fav_messages') || '[]');
         const remainingFavs = localFavsStorage.filter(id => !currentBatchIds.includes(id) || dbFavs.includes(id));
         const updatedFavs = Array.from(new Set([...remainingFavs, ...dbFavs]));
-        localStorage.setItem('wishforge_fav_messages', JSON.stringify(updatedFavs));
+        localStorage.setItem('GiftAI_fav_messages', JSON.stringify(updatedFavs));
         setLocalFavs(updatedFavs);
 
         setMessages(filteredList);
@@ -3688,7 +4067,7 @@ function SavedMessagesPage() {
 
     // Optimistic UI toggle favorites
     const handleFavToggle = async (id, recipient) => {
-        const favs = JSON.parse(localStorage.getItem('wishforge_fav_messages') || '[]');
+        const favs = JSON.parse(localStorage.getItem('GiftAI_fav_messages') || '[]');
         const idx = favs.indexOf(id);
         let newFavs;
         const isCurrentlyFav = idx !== -1;
@@ -3705,7 +4084,7 @@ function SavedMessagesPage() {
         }
 
         // Cache state instantly
-        localStorage.setItem('wishforge_fav_messages', JSON.stringify(newFavs));
+        localStorage.setItem('GiftAI_fav_messages', JSON.stringify(newFavs));
         setLocalFavs(newFavs);
 
         // Async background synchronization
@@ -3715,7 +4094,7 @@ function SavedMessagesPage() {
             console.error("Favorite backend sync failed", e);
             showToast("Failed to sync favorite with server.", true);
             // Revert state
-            localStorage.setItem('wishforge_fav_messages', JSON.stringify(favs));
+            localStorage.setItem('GiftAI_fav_messages', JSON.stringify(favs));
             setLocalFavs(favs);
         }
     };
@@ -3741,9 +4120,9 @@ function SavedMessagesPage() {
 
     const handleDelete = (id, recipient) => {
         if (confirm("Are you sure you want to delete this greeting template?")) {
-            const deleted = JSON.parse(localStorage.getItem('wishforge_deleted_messages') || '[]');
+            const deleted = JSON.parse(localStorage.getItem('GiftAI_deleted_messages') || '[]');
             deleted.push(id);
-            localStorage.setItem('wishforge_deleted_messages', JSON.stringify(deleted));
+            localStorage.setItem('GiftAI_deleted_messages', JSON.stringify(deleted));
             showToast("Template deleted successfully.");
             addNotification('alert', 'Template Deleted', `Saved template for ${recipient} has been deleted.`);
             fetchSaved();
@@ -3996,7 +4375,7 @@ function FavoritesPage() {
     }, []);
 
     const processFavoritesData = (list, totalCount) => {
-        const deletedIds = JSON.parse(localStorage.getItem('wishforge_deleted_messages') || '[]');
+        const deletedIds = JSON.parse(localStorage.getItem('GiftAI_deleted_messages') || '[]');
         
         // Locally filter out deleted cards
         let filteredList = list.filter(m => !deletedIds.includes(m.id));
@@ -4099,9 +4478,9 @@ function FavoritesPage() {
                 logActivity('unfavorite', `Message for ${recipient} removed from favorites`);
                 
                 // Update local storage cache as well
-                const favs = JSON.parse(localStorage.getItem('wishforge_fav_messages') || '[]');
+                const favs = JSON.parse(localStorage.getItem('GiftAI_fav_messages') || '[]');
                 const updatedFavs = favs.filter(fid => fid !== id);
-                localStorage.setItem('wishforge_fav_messages', JSON.stringify(updatedFavs));
+                localStorage.setItem('GiftAI_fav_messages', JSON.stringify(updatedFavs));
                 
                 // Optimistically remove from list
                 setMessages(prev => prev.filter(m => m.id !== id));
@@ -4132,9 +4511,9 @@ function FavoritesPage() {
 
     const handleDelete = (id, recipient) => {
         if (confirm("Are you sure you want to delete this greeting template?")) {
-            const deleted = JSON.parse(localStorage.getItem('wishforge_deleted_messages') || '[]');
+            const deleted = JSON.parse(localStorage.getItem('GiftAI_deleted_messages') || '[]');
             deleted.push(id);
-            localStorage.setItem('wishforge_deleted_messages', JSON.stringify(deleted));
+            localStorage.setItem('GiftAI_deleted_messages', JSON.stringify(deleted));
             showToast("Template deleted successfully.");
             addNotification('alert', 'Template Deleted', `Saved template for ${recipient} has been deleted.`);
             setMessages(prev => prev.filter(m => m.id !== id));
@@ -4385,7 +4764,7 @@ function HistoryPage() {
             const res = await ApiService.getMessages(q);
             if (res.success) {
                 let list = res.data || [];
-                const deletedIds = JSON.parse(localStorage.getItem('wishforge_deleted_messages') || '[]');
+                const deletedIds = JSON.parse(localStorage.getItem('GiftAI_deleted_messages') || '[]');
                 
                 // Exclude locally deleted messages
                 list = list.filter(m => !deletedIds.includes(m.id));
@@ -4901,13 +5280,13 @@ function AboutPage() {
             <div class="panel-title-area" style=${{ textAlign: 'center', marginBottom: '3rem' }}>
                 <div style=${{ maxWidth: '720px', margin: '0 auto' }}>
                     <h1 style=${{ fontSize: '2.5rem', fontWeight: 800, marginBottom: '0.8rem', background: 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                        About WishForge
+                        About GiftAI
                     </h1>
                     <p style=${{ fontSize: '1.25rem', color: 'var(--text-main)', fontWeight: 600, marginBottom: '1rem' }}>
                         AI-powered personalized greeting message generation for every occasion.
                     </p>
                     <p style=${{ color: 'var(--text-muted)', lineHeight: '1.6' }}>
-                        WishForge helps users quickly generate meaningful, personalized greeting messages using Artificial Intelligence. Say goodbye to writer's block and create thoughtful messages that resonate with your loved ones, colleagues, and friends.
+                        GiftAI helps users quickly generate meaningful, personalized greeting messages using Artificial Intelligence. Say goodbye to writer's block and create thoughtful messages that resonate with your loved ones, colleagues, and friends.
                     </p>
                 </div>
             </div>
@@ -4919,7 +5298,7 @@ function AboutPage() {
                             <i data-lucide="info" style=${{ verticalAlign: 'middle', marginRight: '8px' }}></i> Project Overview
                         </h2>
                         <p style=${{ color: 'var(--text-main)', lineHeight: '1.6', marginBottom: '1rem' }}>
-                            WishForge is an AI-powered greeting message platform that helps users generate personalized messages for birthdays, anniversaries, festivals, thank-you notes, corporate greetings, and many other occasions.
+                            GiftAI is an AI-powered greeting message platform that helps users generate personalized messages for birthdays, anniversaries, festivals, thank-you notes, corporate greetings, and many other occasions.
                         </p>
                         <p style=${{ color: 'var(--text-main)', lineHeight: '1.6' }}>
                             Instead of spending time writing messages manually, users simply provide recipient details, relationship, occasion, tone, and optional context, and AI generates a thoughtful and unique greeting within seconds.
@@ -5042,7 +5421,7 @@ function AboutPage() {
                     <i data-lucide="cpu" style=${{ verticalAlign: 'middle', marginRight: '8px' }}></i> How AI Generation Works
                 </h2>
                 <p style=${{ color: 'var(--text-main)', lineHeight: '1.6', marginBottom: '1.5rem' }}>
-                    WishForge connects users' preferences to state-of-the-art LLMs to produce contextualized responses. Here is a look behind the curtain:
+                    GiftAI connects users' preferences to state-of-the-art LLMs to produce contextualized responses. Here is a look behind the curtain:
                 </p>
                 <div style=${{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
                     <div style=${{ background: 'rgba(255, 255, 255, 0.02)', padding: '1rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)' }}>
@@ -5072,7 +5451,7 @@ function AboutPage() {
                     <div class="glass-card" style=${{ padding: '1.5rem', position: 'relative' }}>
                         <div style=${{ fontSize: '2.5rem', fontWeight: 900, color: 'var(--border-hover)', position: 'absolute', top: '10px', right: '15px' }}>01</div>
                         <h3 style=${{ fontSize: '1.1rem', marginBottom: '0.8rem', color: 'var(--color-primary)' }}>Sign In</h3>
-                        <p style=${{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: '1.5' }}>Sign in to your private WishForge account to access your workspace preferences.</p>
+                        <p style=${{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: '1.5' }}>Sign in to your private GiftAI account to access your workspace preferences.</p>
                     </div>
 
                     <div class="glass-card" style=${{ padding: '1.5rem', position: 'relative' }}>
@@ -5084,7 +5463,7 @@ function AboutPage() {
                     <div class="glass-card" style=${{ padding: '1.5rem', position: 'relative' }}>
                         <div style=${{ fontSize: '2.5rem', fontWeight: 900, color: 'var(--border-hover)', position: 'absolute', top: '10px', right: '15px' }}>03</div>
                         <h3 style=${{ fontSize: '1.1rem', marginBottom: '0.8rem', color: 'var(--color-primary)' }}>AI Synthesis</h3>
-                        <p style=${{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: '1.5' }}>WishForge's prompt orchestration engine queries the AI to write your message.</p>
+                        <p style=${{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: '1.5' }}>GiftAI's prompt orchestration engine queries the AI to write your message.</p>
                     </div>
 
                     <div class="glass-card" style=${{ padding: '1.5rem', position: 'relative' }}>
@@ -5096,7 +5475,7 @@ function AboutPage() {
             </div>
 
             <div style=${{ borderTop: '1px solid var(--border-color)', paddingTop: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-                <strong style=${{ color: 'var(--text-main)', fontSize: '1.2rem', display: 'block', marginBottom: '0.3rem' }}>WishForge</strong>
+                <strong style=${{ color: 'var(--text-main)', fontSize: '1.2rem', display: 'block', marginBottom: '0.3rem' }}>GiftAI</strong>
                 <p style=${{ fontSize: '0.9rem', fontStyle: 'italic', marginBottom: '0.5rem' }}>"Crafting thoughtful messages with the power of Artificial Intelligence."</p>
             </div>
         </${motion.div}>

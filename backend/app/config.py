@@ -49,7 +49,8 @@ class Config:
     DB_NAME = os.getenv('DB_NAME', 'paper_plane_db')
 
     # Build SQLAlchemy Database URI dynamically using pymysql driver
-    SQLALCHEMY_DATABASE_URI = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    # Fallback to SQLite for local development without MySQL server
+    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URI', "sqlite:///app.db")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     # Configure SQLAlchemy with pool_pre_ping=True and pool_recycle=300 for Aiven MySQL compatibility

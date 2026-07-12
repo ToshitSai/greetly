@@ -55,6 +55,36 @@ def generate_greeting():
         if g.role != 'admin':
             customer_id = g.user_id
             
+        # Auto-resolve IDs from names to handle dynamic frontend input
+        from app.models import db, Recipient, Occasion, Tone
+        
+        recipient_name = data.get('recipient_name')
+        if recipient_name:
+            recipient = Recipient.query.filter_by(customer_id=customer_id, name=recipient_name).first()
+            if not recipient:
+                recipient = Recipient(customer_id=customer_id, name=recipient_name, relationship=data.get('relationship', 'Friend'))
+                db.session.add(recipient)
+                db.session.commit()
+            data['recipient_id'] = recipient.id
+            
+        occasion_name = data.get('occasion_name')
+        if occasion_name:
+            occasion = Occasion.query.filter_by(name=occasion_name).first()
+            if not occasion:
+                occasion = Occasion(name=occasion_name)
+                db.session.add(occasion)
+                db.session.commit()
+            data['occasion_id'] = occasion.id
+            
+        tone_name = data.get('tone_name')
+        if tone_name:
+            tone = Tone.query.filter_by(name=tone_name).first()
+            if not tone:
+                tone = Tone(name=tone_name)
+                db.session.add(tone)
+                db.session.commit()
+            data['tone_id'] = tone.id
+            
         # 2. Run generation service
         message, debug_info = generate_and_save_message(
             customer_id=customer_id,

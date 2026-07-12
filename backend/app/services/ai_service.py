@@ -5,7 +5,7 @@
 import os
 import random
 import re
-import google.generativeai as genai
+# import google.generativeai as genai
 from flask import current_app
 
 # Model names list for backup loop in case the primary model is rate-limited on the free tier.
@@ -508,14 +508,16 @@ def get_semantic_context_sentences(extra_note, occasion):
 
 def generate_message_with_ai(prompt, occasion_name, tone_name, recipient_name, relationship, exclude_texts=None, extra_note=None):
     """
-    Attempts to generate a greeting message using Groq chat completions API.
-    Uses llama-3.3-70b-versatile as primary model, falling back to other Groq models on failure.
-    Sets AI temperature to 0.9.
-    Checks for Context Safety Rule (consecutive words copying) and auto-regenerates if violated.
-    Returns: (message_text, ai_used, debug_info)
+    Multi-provider AI generation pipeline.
+    Attempts generation sequentially: Groq -> OpenAI -> Gemini -> Offline Templates.
+    Automatically handles rate limits by failing over to the next provider/model.
     """
-    api_key = current_app.config.get('GROQ_API_KEY')
-
+    import requests
+    
+    groq_key = current_app.config.get('GROQ_API_KEY')
+    openai_key = current_app.config.get('OPENAI_API_KEY')
+    gemini_key = current_app.config.get('GEMINI_API_KEY')
+    
     debug_info = {
         "prompt": prompt,
         "raw_response": None,
@@ -524,62 +526,56 @@ def generate_message_with_ai(prompt, occasion_name, tone_name, recipient_name, r
         "error_logs": []
     }
     
-    if not api_key or api_key == "your_groq_api_key_here":
-        err_msg = "Groq API key is not configured. Using fallback templates."
-        print(err_msg)
-        debug_info["status"] = "API Key Missing"
-        debug_info["error_logs"].append(err_msg)
-        
-        debug_info["ai_provider"] = "Groq API"
-        debug_info["request_sent"] = f"Prompt: {prompt}\nTemperature: 0.9"
-        debug_info["response_status"] = "401 (Unauthorized / Missing API Key)"
-        debug_info["error_msg"] = "GROQ_API_KEY environment variable is not set or empty in .env"
-        debug_info["fallback_triggered"] = "Yes"
-        
-        fallback_msg = get_fallback_message(occasion_name, tone_name, recipient_name, relationship, exclude_texts, extra_note)
-        return fallback_msg, False, debug_info
-        
-    models_to_try = [
-        'llama-3.3-70b-versatile',
-        'llama-3.1-8b-instant',
-        'mixtral-8x7b-32768',
-        'llama3-70b-8192',
-        'llama3-8b-8192'
-    ]
+    # Define our provider fallback sequence and models
+    providers = []
     
-    import requests
-    max_retries_per_model = 2
+    if groq_key and groq_key != "your_groq_api_key_here":
+        providers.append({
+            "name": "Groq",
+            "url": "https://api.groq.com/openai/v1/chat/completions",
+            "key": groq_key,
+            "models": ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768']
+        })
+        
+    if openai_key and openai_key != "your_openai_api_key_here":
+        providers.append({
+            "name": "OpenAI",
+            "url": "https://api.openai.com/v1/chat/completions",
+            "key": openai_key,
+            "models": ['gpt-4o-mini', 'gpt-3.5-turbo']
+        })
+        
+    if gemini_key and gemini_key != "your_gemini_api_key_here":
+        providers.append({
+            "name": "Gemini",
+            "url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+            "key": gemini_key,
+            "models": ['gemini-2.0-flash', 'gemini-1.5-flash']
+        })
+        
     last_status_code = "Unknown"
-    last_error_message = "No models attempted successfully."
+    last_error_message = "No valid API keys found."
     
-    for model_name in models_to_try:
-        model_retries = 0
-        while model_retries < max_retries_per_model:
+    for provider in providers:
+        for model_name in provider["models"]:
+            print(f"Attempting {provider['name']} with model {model_name}...")
+            debug_info["error_logs"].append(f"Attempting {provider['name']} - {model_name}")
+            
             try:
-                print(f"Attempting message generation with Groq model: {model_name} (try {model_retries + 1})...")
-                debug_info["error_logs"].append(f"Attempting model: {model_name} (try {model_retries + 1})")
-                
                 headers = {
-                    "Authorization": f"Bearer {api_key}",
+                    "Authorization": f"Bearer {provider['key']}",
                     "Content-Type": "application/json"
                 }
                 payload = {
                     "model": model_name,
-                    "messages": [
-                        {"role": "user", "content": prompt}
-                    ],
+                    "messages": [{"role": "user", "content": prompt}],
                     "temperature": 0.9,
                     "max_tokens": 500
                 }
                 
-                response = requests.post(
-                    "https://api.groq.com/openai/v1/chat/completions",
-                    headers=headers,
-                    json=payload,
-                    timeout=10.0
-                )
-                
+                response = requests.post(provider["url"], headers=headers, json=payload, timeout=15.0)
                 status_code = response.status_code
+                
                 if status_code != 200:
                     raise Exception(f"HTTP {status_code}: {response.text}")
                     
@@ -592,89 +588,45 @@ def generate_message_with_ai(prompt, occasion_name, tone_name, recipient_name, r
                     lines = [line.strip() for line in cleaned_text.split('\n') if line.strip()]
                     num_sentences = len(lines)
                     
-                    # Verify sentence count constraint strictly (between 5 and 10 sentences)
                     if not (5 <= num_sentences <= 10):
-                        err_line_count = f"Model {model_name} returned invalid line/sentence count: {num_sentences}."
-                        print(err_line_count)
-                        debug_info["error_logs"].append(err_line_count)
+                        raise Exception(f"Validation failed: Invalid sentence count {num_sentences}.")
                         
-                        last_status_code = "400 (Validation Failure)"
-                        last_error_message = err_line_count
-                        model_retries += 1
-                        continue
-                        
-                    # Verify Context Safety Rule (no 4+ consecutive words copied)
                     if extra_note and extra_note.strip():
                         if has_consecutive_words(cleaned_text, extra_note, n=4):
-                            err_safety = f"Context Safety Rule Violated! Raw context copied in generated output: '{cleaned_text}'"
-                            print(err_safety)
-                            debug_info["error_logs"].append(err_safety)
-                            
-                            last_status_code = "400 (Validation Failure)"
-                            last_error_message = err_safety
-                            model_retries += 1
-                            continue
+                            raise Exception("Validation failed: Safety Rule violated (copied raw context).")
                             
                     # Success
                     debug_info["status"] = "Success"
                     debug_info["fallback_used"] = False
-                    
-                    debug_info["ai_provider"] = "Groq API"
-                    debug_info["request_sent"] = f"Prompt: {prompt}\nTemperature: 0.9\nModel: {model_name}"
+                    debug_info["ai_provider"] = f"{provider['name']} ({model_name})"
+                    debug_info["request_sent"] = f"Prompt: {prompt}\nTemperature: 0.9"
                     debug_info["response_status"] = "200 (OK)"
                     debug_info["error_msg"] = "None"
                     debug_info["fallback_triggered"] = "No"
                     
                     return '\n'.join(lines), True, debug_info
                 else:
-                    err_empty = f"Model {model_name} returned an empty response choices list."
-                    print(err_empty)
-                    debug_info["error_logs"].append(err_empty)
-                    
-                    last_status_code = "200 (Empty Response)"
-                    last_error_message = err_empty
-                    model_retries += 1
+                    raise Exception("API returned empty choices.")
                     
             except Exception as e:
-                # Extract code and status details if possible
-                status_code = "Error"
+                err_msg = str(e)
+                print(f"Failed {provider['name']} ({model_name}): {err_msg}")
+                debug_info["error_logs"].append(f"Error {provider['name']}: {err_msg}")
+                last_error_message = err_msg
+                
                 import re
-                match = re.search(r'\b(400|401|403|404|429|500|503|504)\b', str(e))
-                if match:
-                    status_code = match.group(1)
-                    
-                status_desc = f"{status_code} (Error)"
-                if status_code == "429":
-                    status_desc = "429 (Rate Limit / Quota Exceeded)"
-                elif status_code == "401":
-                    status_desc = "401 (Authentication Failure)"
-                elif status_code == "403":
-                    status_desc = "403 (Permission Denied / Bad Key)"
-                elif status_code == "400":
-                    status_desc = "400 (Bad Request / Invalid Argument)"
-                elif status_code == "500":
-                    status_desc = "500 (Internal Server Error)"
-                elif status_code == "503":
-                    status_desc = "503 (Service Unavailable)"
-                elif status_code == "504":
-                    status_desc = "504 (Gateway Timeout)"
+                match = re.search(r'\b(400|401|403|404|429|500|503|504)\b', err_msg)
+                last_status_code = f"{match.group(1)} Error" if match else "Error"
                 
-                last_status_code = status_desc
-                last_error_message = str(e)
-                
-                err_fail = f"Model {model_name} failed: {str(e)}"
-                print(err_fail)
-                debug_info["error_logs"].append(err_fail)
-                # Break inner loop and try next model
-                break
-                
-    err_all_failed = "All Groq API models failed, rate-limited, or violated safety checks. Falling back to templates."
-    print(err_all_failed)
+                # If unauthorized or permission denied, no need to try other models from this provider, break to next provider
+                if "401" in err_msg or "403" in err_msg:
+                    break
+
+    # If all providers fail, use offline fallback
+    print("All AI providers failed or rate-limited. Falling back to offline templates.")
     debug_info["status"] = "AI Failed"
-    debug_info["error_logs"].append(err_all_failed)
-    
-    debug_info["ai_provider"] = "Groq API"
-    debug_info["request_sent"] = f"Prompt: {prompt}\nTemperature: 0.9\nModels attempted: {', '.join(models_to_try)}"
+    debug_info["error_logs"].append("All AI providers failed. Using Offline Fallback.")
+    debug_info["ai_provider"] = "None"
     debug_info["response_status"] = last_status_code
     debug_info["error_msg"] = last_error_message
     debug_info["fallback_triggered"] = "Yes"
@@ -787,31 +739,29 @@ def get_fallback_message(occasion, tone, recipient_name, relationship, exclude_t
                 # Check if context is provided
                 context_block = get_semantic_context_sentences(extra_note, occasion)
                 if context_block:
-                    # S1 (op), S2-S3 (rel), S4-S5-S6 (context), S7 (cl)
-                    sentences = [
-                        formatted_op,
+                    middle = [
                         formatted_rel[0],
                         formatted_rel[1],
                         context_block[0].format(recipient_name=recipient_name, relationship_phrasing=rel_phrasing),
                         context_block[1].format(recipient_name=recipient_name, relationship_phrasing=rel_phrasing),
-                        context_block[2].format(recipient_name=recipient_name, relationship_phrasing=rel_phrasing),
-                        formatted_cl
+                        context_block[2].format(recipient_name=recipient_name, relationship_phrasing=rel_phrasing)
                     ]
+                    random.shuffle(middle)
+                    sentences = [formatted_op] + middle + [formatted_cl]
                 else:
-                    # S1 (op), S2-S3 (rel), S4-S5 (exp), S6 (trans), S7 (cl)
                     for exp_pair in occ_data["expansions"]:
                         formatted_exp = [s.format(recipient_name=recipient_name, relationship_phrasing=rel_phrasing) for s in exp_pair]
                         for trans in occ_data["transitions"]:
                             formatted_trans = trans.format(recipient_name=recipient_name, relationship_phrasing=rel_phrasing)
-                            sentences = [
-                                formatted_op,
+                            middle = [
                                 formatted_rel[0],
                                 formatted_rel[1],
                                 formatted_exp[0],
                                 formatted_exp[1],
-                                formatted_trans,
-                                formatted_cl
+                                formatted_trans
                             ]
+                            random.shuffle(middle)
+                            sentences = [formatted_op] + middle + [formatted_cl]
                             full_msg = '\n'.join(sentences)
                             if full_msg.strip() not in excludes:
                                 available_candidates.append(full_msg)
@@ -830,28 +780,27 @@ def get_fallback_message(occasion, tone, recipient_name, relationship, exclude_t
         
         context_block = get_semantic_context_sentences(extra_note, occasion)
         if context_block:
-            sentences = [
-                op,
+            middle = [
                 formatted_rel[0],
                 formatted_rel[1],
                 context_block[0].format(recipient_name=recipient_name, relationship_phrasing=rel_phrasing),
                 context_block[1].format(recipient_name=recipient_name, relationship_phrasing=rel_phrasing),
-                context_block[2].format(recipient_name=recipient_name, relationship_phrasing=rel_phrasing),
-                cl
+                context_block[2].format(recipient_name=recipient_name, relationship_phrasing=rel_phrasing)
             ]
         else:
             exp_pair = random.choice(occ_data["expansions"])
             formatted_exp = [s.format(recipient_name=recipient_name, relationship_phrasing=rel_phrasing) for s in exp_pair]
             trans = random.choice(occ_data["transitions"]).format(recipient_name=recipient_name, relationship_phrasing=rel_phrasing)
-            sentences = [
-                op,
+            middle = [
                 formatted_rel[0],
                 formatted_rel[1],
                 formatted_exp[0],
                 formatted_exp[1],
-                trans,
-                cl
+                trans
             ]
+        
+        random.shuffle(middle)
+        sentences = [op] + middle + [cl]
         available_candidates = ['\n'.join(sentences)]
         
     return random.choice(available_candidates)

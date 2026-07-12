@@ -68,10 +68,10 @@ def generate_and_save_message(customer_id, recipient_id, occasion_id, tone_id, r
         extra_note=extra_note
     )
     
-    # 5. Check if AI generation failed (disable silent fallback)
-    if not ai_used:
+    # 5. Check if AI generation failed and no fallback was returned
+    if not message_text:
         is_quota = (debug_info.get("response_status") and "429" in str(debug_info.get("response_status"))) or ("quota" in str(debug_info.get("error_msg")).lower())
-        err_msg = "AI generation unavailable: Gemini quota exceeded." if is_quota else f"AI generation unavailable: {debug_info.get('error_msg')}"
+        err_msg = "AI generation unavailable: Quota exceeded." if is_quota else f"AI generation unavailable: {debug_info.get('error_msg')}"
         raise AIGenerationError(err_msg, debug_info)
         
     # 6. Save message record
