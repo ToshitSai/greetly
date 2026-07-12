@@ -3,6 +3,7 @@
 # It reads configuration variables (DB credentials, API keys) from environment variables.
 
 import os
+import tempfile
 from dotenv import load_dotenv
 
 # Load environment variables from .env file in the backend directory
@@ -48,9 +49,17 @@ class Config:
     DB_PORT = os.getenv('DB_PORT', '3306')
     DB_NAME = os.getenv('DB_NAME', 'paper_plane_db')
 
-    # Build SQLAlchemy Database URI dynamically using pymysql driver
-    # Fallback to SQLite for local development without MySQL server
-    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URI', "sqlite:///app.db")
+    # Build SQLAlchemy Database URI dynamically.
+    # Vercel's deployment filesystem is read-only, so the SQLite fallback must
+    # live in /tmp unless an external DATABASE_URI is configured.
+    if os.getenv('DATABASE_URI'):
+        SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URI')
+    elif os.getenv('VERCEL'):
+        sqlite_dir = os.path.join(tempfile.gettempdir(), 'giftai')
+        os.makedirs(sqlite_dir, exist_ok=True)
+        SQLALCHEMY_DATABASE_URI = f"sqlite:///{os.path.join(sqlite_dir, 'app.db')}"
+    else:
+        SQLALCHEMY_DATABASE_URI = "sqlite:///app.db"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     # Configure SQLAlchemy with pool_pre_ping=True and pool_recycle=300 for Aiven MySQL compatibility
