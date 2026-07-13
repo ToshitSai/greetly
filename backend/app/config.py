@@ -67,7 +67,7 @@ class Config:
     DB_HOST = os.getenv('DB_HOST', 'localhost')
     DB_PORT = os.getenv('DB_PORT', '3306')
     DB_NAME = os.getenv('DB_NAME', 'paper_plane_db')
-    DB_SSL_REQUIRED = os.getenv('DB_SSL_REQUIRED', 'false').lower() in ['true', '1', 't']
+    DB_SSL_REQUIRED = os.getenv('DB_SSL_REQUIRED', 'true').lower() in ['true', '1', 't']
     DB_CONNECT_TIMEOUT = int(os.getenv('DB_CONNECT_TIMEOUT', '10'))
 
     @staticmethod
