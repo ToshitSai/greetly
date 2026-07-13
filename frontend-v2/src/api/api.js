@@ -1,4 +1,4 @@
-const API_BASE_URL = '/api'; // Use relative path so it automatically routes to the correct IP/Domain
+const API_BASE_URL = '/api';
 
 const authFetch = async (endpoint, options = {}) => {
   const token = localStorage.getItem('token');
@@ -12,12 +12,26 @@ const authFetch = async (endpoint, options = {}) => {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      ...options,
+      headers,
+    });
+  } catch {
+    throw new Error('Unable to reach the server. Please check your connection and try again.');
+  }
 
-  const data = await response.json();
+  const contentType = response.headers.get('content-type') || '';
+  const data = contentType.includes('application/json')
+    ? await response.json()
+    : { error: await response.text() };
+
+  if (response.status === 401) {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    window.dispatchEvent(new CustomEvent('auth-expired'));
+  }
 
   if (!response.ok) {
     throw new Error(data.error || data.message || 'An error occurred during the request.');
@@ -44,8 +58,19 @@ export const api = {
 
   getMessages: () => authFetch('/messages'),
 
-  sendEmail: (to_email, to_name, message_text) => authFetch('/send-email', {
+  getDashboardStats: () => authFetch('/dashboard/stats'),
+
+  saveMessage: (messageId) => authFetch(`/messages/${messageId}/save`, {
+    method: 'POST'
+  }),
+
+  editMessage: (messageId, message_text) => authFetch(`/messages/${messageId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ message_text, edited_by: 'customer' })
+  }),
+
+  sendEmail: (to_email, to_name, message_text, subject = 'A special message just for you!') => authFetch('/send-email', {
     method: 'POST',
-    body: JSON.stringify({ to_email, to_name, message_text, subject: 'A special message just for you!' })
+    body: JSON.stringify({ to_email, to_name, message_text, subject })
   })
 };

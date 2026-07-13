@@ -5,6 +5,7 @@ import LandingPage from '../pages/LandingPage';
 import LoginPage from '../pages/LoginPage';
 import SignUpPage from '../pages/SignUpPage';
 import Dashboard from '../pages/Dashboard';
+import { useAuth } from '../contexts/AuthContext';
 
 const pageVariants = {
   initial: { opacity: 0, y: 20, scale: 0.98 },
@@ -26,6 +27,11 @@ const PageWrapper = ({ children }) => (
 
 export default function AnimatedRoutes() {
   const location = useLocation();
+  const { currentUser } = useAuth();
+
+  const dashboardElement = currentUser
+    ? <PageWrapper><Dashboard /></PageWrapper>
+    : <PageWrapper><LoginPage /></PageWrapper>;
 
   return (
     <AnimatePresence mode="wait">
@@ -33,7 +39,7 @@ export default function AnimatedRoutes() {
         <Route path="/" element={<PageWrapper><LandingPage /></PageWrapper>} />
         <Route path="/login" element={<PageWrapper><LoginPage /></PageWrapper>} />
         <Route path="/signup" element={<PageWrapper><SignUpPage /></PageWrapper>} />
-        <Route path="/dashboard" element={<PageWrapper><Dashboard /></PageWrapper>} />
+        <Route path="/dashboard" element={dashboardElement} />
       </Routes>
     </AnimatePresence>
   );

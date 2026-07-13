@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FloatingInput } from '../components/ui/FloatingInput';
 import { TactileButton } from '../components/ui/TactileButton';
 import { Link, useNavigate } from 'react-router-dom';
-import { Sparkles, Send, Copy, RotateCcw, LogOut, ArrowLeft, Save, Edit2, Download, RefreshCw } from 'lucide-react';
+import { Sparkles, Copy, LogOut, ArrowLeft, Save, Edit2, RefreshCw } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../api/api';
 
@@ -15,6 +15,8 @@ export default function Dashboard() {
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [activeMessage, setActiveMessage] = useState(null);
   const [showCopyPopup, setShowCopyPopup] = useState(false);
   
   const { currentUser, logout } = useAuth();
@@ -34,6 +36,11 @@ export default function Dashboard() {
   });
 
   useEffect(() => {
+    if (!currentUser) {
+      navigate('/login');
+      return;
+    }
+
     if (view === 'history') {
       setHistoryLoading(true);
       api.getMessages()
@@ -43,7 +50,7 @@ export default function Dashboard() {
         .catch(err => console.error("Failed to fetch history:", err))
         .finally(() => setHistoryLoading(false));
     }
-  }, [view]);
+  }, [view, currentUser, navigate]);
 
   const handleLogout = () => {
     logout();
@@ -51,7 +58,12 @@ export default function Dashboard() {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    e?.preventDefault?.();
+    if (!currentUser) {
+      navigate('/login');
+      return;
+    }
+
     setLoading(true);
     
     try {
@@ -71,7 +83,10 @@ export default function Dashboard() {
         tone_name: formData.tone
       });
       
-      setResult(res.data?.message_text || res.data?.message || "Generated successfully!");
+      const generatedMessage = res.data || {};
+      setActiveMessage(generatedMessage.id ? generatedMessage : null);
+      setResult(generatedMessage.message_text || generatedMessage.message || "Generated successfully!");
+      setIsEditing(false);
     } catch (err) {
       alert("Error generating message: " + err.message);
     } finally {
@@ -82,11 +97,60 @@ export default function Dashboard() {
   const handleSendEmail = async (e) => {
     e.preventDefault();
     try {
-      await api.sendEmail(emailData.email, formData.recipientName, result);
+      await api.sendEmail(emailData.email, formData.recipientName, result, emailData.subject);
       setEmailModalOpen(false);
       alert("Email sent successfully!");
     } catch (err) {
       alert("Error sending email: " + err.message);
+    }
+  };
+
+  const downloadMessage = () => {
+    const element = document.createElement("a");
+    const file = new Blob([result], {type: 'text/plain'});
+    element.href = URL.createObjectURL(file);
+    element.download = "greetly-message.txt";
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+    URL.revokeObjectURL(element.href);
+  };
+
+  const handleSaveMessage = async () => {
+    if (!result) return;
+
+    setIsSaving(true);
+    try {
+      if (activeMessage?.id) {
+        const res = await api.saveMessage(activeMessage.id);
+        setActiveMessage(res.data || activeMessage);
+      }
+      downloadMessage();
+    } catch (err) {
+      alert("Error saving message: " + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleEditToggle = async () => {
+    if (!isEditing) {
+      setIsEditing(true);
+      return;
+    }
+
+    if (!activeMessage?.id) {
+      setIsEditing(false);
+      return;
+    }
+
+    try {
+      const res = await api.editMessage(activeMessage.id, result);
+      setActiveMessage(res.data || activeMessage);
+      setResult(res.data?.message_text || result);
+      setIsEditing(false);
+    } catch (err) {
+      alert("Error updating message: " + err.message);
     }
   };
 
@@ -148,7 +212,19 @@ export default function Dashboard() {
                   return (
                   <div 
                     key={i} 
-                    onClick={() => { setResult(msg.message_text); setView('craft'); }}
+                    onClick={() => {
+                      setActiveMessage(msg);
+                      setResult(msg.message_text);
+                      setFormData({
+                        recipientName: msg.recipient_name || '',
+                        relationship: msg.relationship || 'Friend',
+                        occasion: msg.occasion_name || 'Birthday',
+                        tone: msg.tone_name || 'Funny',
+                        extraNotes: ''
+                      });
+                      setIsEditing(false);
+                      setView('craft');
+                    }}
                     className="comic-panel p-4 bg-brand-yellow relative cursor-pointer hover:-translate-y-1 hover:shadow-comic transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 group"
                   >
                     <div>
@@ -316,18 +392,10 @@ export default function Dashboard() {
                 )}
                 <Copy size={20} /> Copy
               </TactileButton>
-              <TactileButton onClick={() => {
-                const element = document.createElement("a");
-                const file = new Blob([result], {type: 'text/plain'});
-                element.href = URL.createObjectURL(file);
-                element.download = "greetly-message.txt";
-                document.body.appendChild(element);
-                element.click();
-                document.body.removeChild(element);
-              }} variant="secondary" className="flex-1 min-w-[150px] flex items-center justify-center gap-2 !bg-[#06D6A0] !text-brand-black border-[3px]">
-                <Save size={20} /> Save
+              <TactileButton onClick={handleSaveMessage} disabled={isSaving} variant="secondary" className="flex-1 min-w-[150px] flex items-center justify-center gap-2 !bg-[#06D6A0] !text-brand-black border-[3px]">
+                <Save size={20} /> {isSaving ? "Saving" : "Save"}
               </TactileButton>
-              <TactileButton onClick={() => setIsEditing(!isEditing)} variant="secondary" className="flex-1 min-w-[150px] flex items-center justify-center gap-2 !bg-brand-yellow !text-brand-black border-[3px]">
+              <TactileButton onClick={handleEditToggle} variant="secondary" className="flex-1 min-w-[150px] flex items-center justify-center gap-2 !bg-brand-yellow !text-brand-black border-[3px]">
                 <Edit2 size={20} /> {isEditing ? "Done" : "Edit"}
               </TactileButton>
               <TactileButton onClick={(e) => handleSubmit(e)} variant="primary" className="flex-1 min-w-[150px] flex items-center justify-center gap-2 !bg-brand-purple !text-white border-[3px]">
