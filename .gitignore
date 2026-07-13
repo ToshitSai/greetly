@@ -36,6 +36,7 @@ user_passwords.json
 .env.development.local
 .env.test.local
 .env.production.local
+.tidb-zero.json
 
 # Database backups & SQLite files
 backend/database/database.db
