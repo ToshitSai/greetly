@@ -5,6 +5,7 @@ from flask import Blueprint, request
 from app.utils.response_helper import success_response, error_response
 from app.utils.validators import validate_customer_data
 from app.services.customer_service import create_customer, get_all_customers, get_customer_by_id
+from app.models import Recipient, Message
 
 customer_bp = Blueprint('customer_routes', __name__)
 
@@ -72,5 +73,36 @@ def get_customer(customer_id):
         if not customer:
             return error_response("Customer not found", 404)
         return success_response(customer.to_dict())
+    except Exception as e:
+        return error_response(f"An unexpected error occurred: {str(e)}", 500)
+
+@customer_bp.route('/admin/customers/<int:customer_id>/overview', methods=['GET'])
+@token_required
+def get_customer_overview(customer_id):
+    """
+    GET /api/admin/customers/:id/overview
+    Returns a single admin-friendly payload with the customer's profile,
+    recipients, and recent messages.
+    """
+    try:
+        if g.role != 'admin':
+            return error_response("Access denied. Admin privileges required.", 403)
+
+        customer = get_customer_by_id(customer_id)
+        if not customer:
+            return error_response("Customer not found", 404)
+
+        recipients = Recipient.query.filter_by(customer_id=customer_id).order_by(Recipient.created_at.desc()).all()
+        messages = Message.query.filter_by(customer_id=customer_id).order_by(Message.created_at.desc()).limit(50).all()
+
+        return success_response({
+            "customer": customer.to_dict(),
+            "recipients": [recipient.to_dict() for recipient in recipients],
+            "messages": [message.to_dict() for message in messages],
+            "counts": {
+                "recipients": len(recipients),
+                "messages": len(messages)
+            }
+        })
     except Exception as e:
         return error_response(f"An unexpected error occurred: {str(e)}", 500)

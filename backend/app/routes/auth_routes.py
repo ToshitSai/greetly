@@ -75,6 +75,7 @@ def login():
 
 
 @auth_bp.route('/register', methods=['POST'])
+@limiter.limit(lambda: current_app.config.get('LIMIT_AUTH', '10 per 5 minutes'))
 def register():
     """
     POST /api/auth/register

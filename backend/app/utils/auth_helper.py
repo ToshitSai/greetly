@@ -4,7 +4,10 @@ from flask import request, jsonify, g, current_app
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 
 def get_serializer():
-    return URLSafeTimedSerializer(current_app.config['SECRET_KEY'])
+    return URLSafeTimedSerializer(
+        current_app.config['SECRET_KEY'],
+        salt=current_app.config.get('TOKEN_SALT', 'giftai-auth-token')
+    )
 
 def generate_token(user_id, role):
     """
@@ -19,8 +22,7 @@ def verify_token(token):
     """
     s = get_serializer()
     try:
-        # Token valid for 24 hours (86400 seconds)
-        data = s.loads(token, max_age=86400)
+        data = s.loads(token, max_age=current_app.config.get('TOKEN_MAX_AGE_SECONDS', 86400))
         return data.get("user_id"), data.get("role")
     except (SignatureExpired, BadSignature):
         return None, None
@@ -35,9 +37,9 @@ def token_required(f):
         
         # Check Authorization header
         if 'Authorization' in request.headers:
-            auth_header = request.headers['Authorization']
+            auth_header = request.headers['Authorization'].strip()
             if auth_header.startswith('Bearer '):
-                token = auth_header.split(" ")[1]
+                token = auth_header.split(" ", 1)[1].strip()
         
         if not token:
             return jsonify({

@@ -121,6 +121,7 @@ def create_app(config_class=Config):
                 "ok": database_ok,
                 "mode": app.config.get("DATABASE_MODE"),
                 "persistent": app.config.get("DATABASE_MODE") == "external",
+                "configured_external_uri": bool(app.config.get("EXTERNAL_DATABASE_URI")),
                 "error": database_error
             },
             "ai": {
