@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, ArrowRight, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 
 export function CookieConsent() {
   const [isVisible, setIsVisible] = useState(false);
   const [hasDismissed, setHasDismissed] = useState(true);
   const [viewState, setViewState] = useState('PRIMARY'); // PRIMARY, CUSTOMIZE, PRIVACY_POLICY
+  const navigate = useNavigate();
+  const { currentUser } = useAuth();
   
   const [preferences, setPreferences] = useState({
     essential: true, // locked
@@ -22,11 +26,19 @@ export function CookieConsent() {
   }, []);
 
   const handleAcceptAll = () => {
+    if (!currentUser) {
+      navigate('/login');
+      return;
+    }
     setPreferences({ essential: true, analytics: true, personalization: true });
     finishConsent();
   };
 
   const handleSavePreferences = () => {
+    if (!currentUser) {
+      navigate('/login');
+      return;
+    }
     finishConsent();
   };
 
@@ -89,6 +101,7 @@ export function CookieConsent() {
                       onAccept={handleAcceptAll} 
                       onCustomize={() => setViewState('CUSTOMIZE')}
                       onPrivacy={() => setViewState('PRIVACY_POLICY')}
+                      currentUser={currentUser}
                     />
                   )}
                   {viewState === 'CUSTOMIZE' && (
@@ -119,7 +132,7 @@ export function CookieConsent() {
 
 // --- Sub Views ---
 
-function PrimaryView({ onAccept, onCustomize, onPrivacy }) {
+function PrimaryView({ onAccept, onCustomize, onPrivacy, currentUser }) {
   return (
     <motion.div 
       initial={{ opacity: 0, x: -20 }}
@@ -142,7 +155,7 @@ function PrimaryView({ onAccept, onCustomize, onPrivacy }) {
           onClick={onAccept}
           className="group bg-[#FF5A5F] border-[2px] border-[#0F0A1A] py-1.5 px-3 rounded-lg font-display font-black uppercase tracking-wider text-[#0F0A1A] shadow-[2px_2px_0_0_#0F0A1A] transition-all flex-1 flex items-center justify-center gap-1 text-[10px]"
         >
-          Accept All
+          {currentUser ? "Accept All" : "Log in to Accept"}
           <ArrowRight className="w-3 h-3 transition-transform group-hover:translate-x-1" strokeWidth={3} />
         </motion.button>
         

@@ -82,7 +82,7 @@ export default function HeroSection() {
             }}
           >
             <TactileButton variant="secondary" className="w-full text-lg px-8 py-4">
-              SEE SAMPLES
+              SAMPLES
             </TactileButton>
           </a>
         </div>
