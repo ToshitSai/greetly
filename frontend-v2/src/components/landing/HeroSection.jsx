@@ -44,8 +44,16 @@ export default function HeroSection() {
         }
       } else {
         if (index > 0) {
-          index--;
-          timeout = setTimeout(type, 30); // Deleting speed
+          // Find the previous space or jump to 0 if none found
+          let prevSpaceIndex = currentText.lastIndexOf(' ', index - 1);
+          // To make it look like we are deleting the space along with the word
+          if (prevSpaceIndex !== -1 && prevSpaceIndex === index - 1) {
+            // If the character we just jumped from was a space, jump to the next word boundary
+            prevSpaceIndex = currentText.lastIndexOf(' ', prevSpaceIndex - 1);
+          }
+          
+          index = prevSpaceIndex === -1 ? 0 : prevSpaceIndex;
+          timeout = setTimeout(type, 150); // Word-by-word deleting speed
         } else {
           setGreetingIndex((prevIndex) => (prevIndex + 1) % sampleGreetings.length);
         }
