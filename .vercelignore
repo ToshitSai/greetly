@@ -1,4 +1,4 @@
-backend/.env
-frontend-v2/.env
-frontend-v2/.env.*
-.env
+backend
+requirements.txt
+tests
+.venv

@@ -1,0 +1,7 @@
+{
+  "name": "greetly-root",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "cd frontend-v2 && npm install && npm run build"
+  }
+}

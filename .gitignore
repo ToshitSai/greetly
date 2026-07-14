@@ -74,3 +74,4 @@ logs/
 *.dmp
 
 .vercel
+.env*
