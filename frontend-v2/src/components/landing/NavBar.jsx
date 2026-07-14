@@ -40,8 +40,6 @@ export default function NavBar() {
       {/* Desktop Links */}
       <div className="hidden md:flex items-center gap-8 font-body font-bold text-brand-black">
         <motion.button whileHover={{ y: -4 }} whileTap={{ scale: 0.9 }} onClick={(e) => scrollToSection(e, 'how-it-works')} className="hover:text-brand-purple transition-colors">How It Works</motion.button>
-        <motion.button whileHover={{ y: -4 }} whileTap={{ scale: 0.9 }} onClick={(e) => scrollToSection(e, 'samples')} className="hover:text-brand-purple transition-colors">Samples</motion.button>
-        
         {currentUser ? (
           <>
             <Link to="/dashboard">
@@ -82,7 +80,6 @@ export default function NavBar() {
             className="fixed inset-0 z-40 bg-brand-cyan border-l-[8px] border-brand-black flex flex-col items-center justify-center gap-8 font-display text-3xl font-black"
           >
             <motion.button whileTap={{ scale: 0.9 }} onClick={(e) => scrollToSection(e, 'how-it-works')} className="hover:text-white transition-colors">How It Works</motion.button>
-            <motion.button whileTap={{ scale: 0.9 }} onClick={(e) => scrollToSection(e, 'samples')} className="hover:text-white transition-colors">Samples</motion.button>
             {currentUser ? (
               <div className="flex flex-col items-center gap-4 mt-8">
                 <Link to="/dashboard" onClick={() => setMobileMenuOpen(false)}>
