@@ -67,15 +67,15 @@ export default function HeroSection() {
           Turn any occasion into a hyper-personalized, delightful message in seconds. No more writer's block, just genuine joy.
         </p>
         
-        <div className="flex flex-col sm:flex-row gap-6 w-full sm:w-auto">
-          <Link to={currentUser ? "/dashboard" : "/signup"}>
-            <TactileButton variant="primary" className="w-full sm:w-auto text-lg px-8 py-4">
+        <div className="flex flex-col sm:flex-row gap-6 w-full justify-center">
+          <Link to={currentUser ? "/dashboard" : "/signup"} className="w-full sm:w-64">
+            <TactileButton variant="primary" className="w-full text-lg px-8 py-4">
               START CRAFTING
             </TactileButton>
           </Link>
           <a 
             href="#samples" 
-            className="w-full sm:w-auto"
+            className="w-full sm:w-64"
             onClick={(e) => {
               e.preventDefault();
               document.getElementById('samples')?.scrollIntoView({ behavior: 'smooth' });
