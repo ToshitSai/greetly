@@ -56,7 +56,15 @@ def generate_greeting():
             customer_id = g.user_id
             
         # Auto-resolve IDs from names to handle dynamic frontend input
-        from app.models import db, Recipient, Occasion, Tone
+        from app.models import db, Recipient, Occasion, Tone, Customer
+        
+        # Check if customer exists, if not recreate (handles serverless sqlite memory resets)
+        customer = Customer.query.get(customer_id)
+        if not customer:
+            customer = Customer(id=customer_id, name=f"User {customer_id}", email=f"user{customer_id}@example.com", password_hash="dummy")
+            db.session.add(customer)
+            db.session.commit()
+
         
         recipient_name = data.get('recipient_name')
         if recipient_name:
