@@ -569,7 +569,9 @@ def generate_message_with_ai(prompt, occasion_name, tone_name, recipient_name, r
                 payload = {
                     "model": model_name,
                     "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.9,
+                    "temperature": 1.1,
+                    "presence_penalty": 0.4,
+                    "frequency_penalty": 0.4,
                     "max_tokens": 500
                 }
                 
