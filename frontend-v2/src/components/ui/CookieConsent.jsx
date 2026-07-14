@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, ArrowRight, X } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
 export function CookieConsent() {
@@ -9,6 +9,7 @@ export function CookieConsent() {
   const [hasDismissed, setHasDismissed] = useState(true);
   const [viewState, setViewState] = useState('PRIMARY'); // PRIMARY, CUSTOMIZE, PRIVACY_POLICY
   const navigate = useNavigate();
+  const location = useLocation();
   const { currentUser } = useAuth();
   
   const [preferences, setPreferences] = useState({
@@ -48,20 +49,22 @@ export function CookieConsent() {
     setTimeout(() => setHasDismissed(true), 500); // Wait for exit animation
   };
 
-  if (hasDismissed && !isVisible) {
+  // Hide on auth pages
+  const hiddenRoutes = ['/login', '/signup'];
+  if ((hasDismissed && !isVisible) || hiddenRoutes.includes(location.pathname)) {
     return null;
   }
 
   return (
     <AnimatePresence>
       {isVisible && (
-        <div className="fixed inset-x-0 bottom-0 md:inset-auto md:bottom-6 md:right-6 z-50 p-4 md:p-0 flex justify-center md:justify-end items-end md:items-center pointer-events-none">
+        <div className="fixed inset-x-0 bottom-0 md:inset-auto md:bottom-6 md:right-6 z-50 p-2 md:p-0 flex justify-center md:justify-end items-end md:items-center pointer-events-none">
           <motion.div 
             initial={{ y: 100, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 100, opacity: 0 }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="pointer-events-auto relative w-full max-w-[320px]"
+            className="pointer-events-auto relative w-full max-w-[320px] scale-[0.95] sm:scale-100 origin-bottom"
           >
             {/* Giant color-block background shapes - scaled down */}
             <div className="absolute -top-8 -left-8 w-24 h-24 bg-[#6E00FF] rounded-full border-[4px] border-[#0F0A1A] shadow-[4px_4px_0_0_#0F0A1A] -z-10" />

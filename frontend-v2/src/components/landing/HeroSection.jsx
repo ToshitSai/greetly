@@ -59,11 +59,11 @@ export default function HeroSection() {
         transition={{ duration: 0.6, ease: "easeOut" }}
         className="max-w-4xl mx-auto flex flex-col items-center"
       >
-        <h1 className="text-5xl md:text-8xl font-black uppercase mb-6 leading-none tracking-tight text-white drop-shadow-[4px_4px_0_#0F0A1A]">
-          Words that <span className="text-brand-yellow">POP!</span>
+        <h1 className="text-4xl sm:text-6xl md:text-8xl font-black uppercase mb-4 sm:mb-6 leading-[1.1] md:leading-none tracking-tight text-white drop-shadow-[3px_3px_0_#0F0A1A] md:drop-shadow-[4px_4px_0_#0F0A1A] px-2">
+          Words that <span className="text-brand-yellow block sm:inline">POP!</span>
         </h1>
         
-        <p className="text-xl md:text-2xl font-bold font-body max-w-2xl mx-auto mb-12 text-brand-black">
+        <p className="text-lg sm:text-xl md:text-2xl font-bold font-body max-w-2xl mx-auto mb-10 md:mb-12 text-brand-black px-4">
           Turn any occasion into a hyper-personalized, delightful message in seconds. No more writer's block, just genuine joy.
         </p>
         
