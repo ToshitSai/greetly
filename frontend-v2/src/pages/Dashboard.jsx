@@ -8,7 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { api } from '../api/api';
 
 export default function Dashboard() {
-  const [view, setView] = useState('history'); // 'history', 'craft'
+  const [view, setView] = useState('craft'); // 'history', 'craft'
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
