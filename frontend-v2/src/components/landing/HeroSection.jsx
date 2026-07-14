@@ -53,7 +53,7 @@ export default function HeroSection() {
           }
           
           index = prevSpaceIndex === -1 ? 0 : prevSpaceIndex;
-          timeout = setTimeout(type, 50); // Much faster, smoother word-by-word deleting speed
+          timeout = setTimeout(type, 100); // Balanced word-by-word deleting speed
         } else {
           setGreetingIndex((prevIndex) => (prevIndex + 1) % sampleGreetings.length);
         }
