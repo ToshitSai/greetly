@@ -6,7 +6,7 @@ import re
 from marshmallow import ValidationError
 from app.schemas import CustomerRegisterSchema, MessageGenerationSchema, MessageEditSchema
 
-PASSWORD_REGEX = re.compile(r'^(?=.*[A-Za-z])(?=.*\d).{8,128}$')
+PASSWORD_REGEX = re.compile(r'^.{6,128}$')
 
 def validate_customer_data(data):
     """Validates parameters for registering a customer."""
@@ -21,11 +21,11 @@ def validate_customer_data(data):
     return None
 
 def validate_password_strength(password):
-    """Require a password with letters, digits, and reasonable length."""
+    """Require a password with reasonable length."""
     if not password:
         return "Password is required."
     if not PASSWORD_REGEX.match(password):
-        return "Password must be 8-128 characters and include at least one letter and one number."
+        return "Password must be between 6 and 128 characters long."
     return None
 
 def validate_recipient_data(data):

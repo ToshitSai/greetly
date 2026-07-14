@@ -90,10 +90,6 @@ export default function LoginPage() {
             <TactileButton type="submit" variant="primary" className="w-full py-4 text-lg mt-4" disabled={loading}>
               {loading ? "CRAFTING..." : "LET'S CRAFT"}
             </TactileButton>
-            
-            <TactileButton type="button" variant="secondary" className="w-full py-4 text-lg">
-              CONTINUE WITH GOOGLE
-            </TactileButton>
           </form>
 
           <div className="mt-8 text-center font-body font-bold text-brand-black">
