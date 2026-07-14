@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FloatingInput } from '../components/ui/FloatingInput';
 import { TactileButton } from '../components/ui/TactileButton';
 import { Link, useNavigate } from 'react-router-dom';
-import { Sparkles, Copy, LogOut, ArrowLeft, Save, Edit2, RefreshCw, ChevronDown } from 'lucide-react';
+import { Sparkles, Copy, LogOut, ArrowLeft, Save, Edit2, RefreshCw, ChevronDown, Mail } from 'lucide-react';
 import { CustomSelect } from '../components/ui/CustomSelect';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../api/api';
@@ -70,9 +70,6 @@ export default function Dashboard() {
     try {
       const payload = {
         customer_id: currentUser ? currentUser.id : 0,
-        recipient_id: 1, 
-        occasion_id: 1, 
-        tone_id: 1, 
         relationship: formData.relationship,
         extra_note: formData.extraNotes
       };
@@ -170,7 +167,7 @@ export default function Dashboard() {
           <div className="bg-white border-[3px] border-brand-black shadow-comic-sm px-4 py-2 rounded-lg font-bold">
             Hi, {currentUser ? currentUser.name.split(' ')[0] : 'Creator'}! 👋
           </div>
-          <button onClick={handleLogout} className="bg-brand-yellow border-[3px] border-brand-black shadow-comic-sm p-2 rounded-full hover:-translate-y-1 hover:shadow-comic transition-all">
+          <button aria-label="Log Out" onClick={handleLogout} className="bg-brand-yellow border-[3px] border-brand-black shadow-comic-sm p-2 rounded-full hover:-translate-y-1 hover:shadow-comic transition-all">
             <LogOut size={20} />
           </button>
         </div>
@@ -270,7 +267,7 @@ export default function Dashboard() {
             </div>
 
             <div className="flex items-center gap-4 mb-8 border-b-[4px] border-brand-black pb-4">
-              <button onClick={() => setView('history')} className="bg-white border-2 border-brand-black p-2 rounded-full hover:scale-110 transition-transform">
+              <button aria-label="Back to History" onClick={() => setView('history')} className="bg-white border-2 border-brand-black p-2 rounded-full hover:scale-110 transition-transform">
                 <ArrowLeft size={20} />
               </button>
               <h1 className="text-3xl md:text-4xl font-black uppercase tracking-wider">
@@ -333,7 +330,7 @@ export default function Dashboard() {
             className="w-full"
           >
             <div className="flex items-center gap-4 mb-6">
-              <button onClick={() => { setResult(null); setView('history'); }} className="bg-white border-[3px] border-brand-black p-2 rounded-full hover:scale-110 transition-transform">
+              <button aria-label="Back to History" onClick={() => { setResult(null); setView('history'); }} className="bg-white border-[3px] border-brand-black p-2 rounded-full hover:scale-110 transition-transform">
                 <ArrowLeft size={24} />
               </button>
               <h2 className="text-2xl font-black uppercase">Back to Dashboard</h2>
@@ -346,13 +343,13 @@ export default function Dashboard() {
               
               {isEditing ? (
                 <textarea 
-                  className="w-full text-xl font-body font-bold leading-relaxed mt-4 p-4 bg-brand-yellow/20 rounded border-2 border-dashed border-brand-black/40 min-h-[150px] outline-none focus:border-brand-black focus:bg-brand-yellow/30 transition-colors"
+                  className="w-full text-lg md:text-xl font-body font-bold leading-relaxed mt-4 p-4 bg-brand-yellow/20 rounded border-2 border-dashed border-brand-black/40 min-h-[150px] outline-none focus:border-brand-black focus:bg-brand-yellow/30 transition-colors"
                   value={result}
                   onChange={(e) => setResult(e.target.value)}
                   autoFocus
                 />
               ) : (
-                <div className="text-xl font-body font-bold leading-relaxed whitespace-pre-wrap mt-4 p-4 bg-brand-yellow/20 rounded border-2 border-dashed border-brand-black/20 min-h-[150px]">
+                <div className="text-lg md:text-xl font-body font-bold leading-relaxed whitespace-pre-wrap mt-4 p-4 bg-brand-yellow/20 rounded border-2 border-dashed border-brand-black/20 min-h-[150px]">
                   {result}
                 </div>
               )}
@@ -363,7 +360,7 @@ export default function Dashboard() {
                 navigator.clipboard.writeText(result);
                 setShowCopyPopup(true);
                 setTimeout(() => setShowCopyPopup(false), 2000);
-              }} variant="secondary" className="flex-1 min-w-[150px] flex items-center justify-center gap-2 bg-white !text-brand-black border-[3px] relative">
+              }} variant="secondary" className="w-full sm:flex-1 sm:min-w-[150px] flex items-center justify-center gap-2 bg-white !text-brand-black border-[3px] relative">
                 {showCopyPopup && (
                   <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-brand-black text-white px-4 py-2 rounded-full font-bold text-sm shadow-comic whitespace-nowrap z-50 animate-bounce">
                     Text Copied!
@@ -372,13 +369,16 @@ export default function Dashboard() {
                 )}
                 <Copy size={20} /> Copy
               </TactileButton>
-              <TactileButton onClick={handleSaveMessage} disabled={isSaving} variant="secondary" className="flex-1 min-w-[150px] flex items-center justify-center gap-2 !bg-[#06D6A0] !text-brand-black border-[3px]">
+              <TactileButton onClick={handleSaveMessage} disabled={isSaving} variant="secondary" className="w-full sm:flex-1 sm:min-w-[150px] flex items-center justify-center gap-2 !bg-[#06D6A0] !text-brand-black border-[3px]">
                 <Save size={20} /> {isSaving ? "Saving" : "Save"}
               </TactileButton>
-              <TactileButton onClick={handleEditToggle} variant="secondary" className="flex-1 min-w-[150px] flex items-center justify-center gap-2 !bg-brand-yellow !text-brand-black border-[3px]">
+              <TactileButton onClick={() => setEmailModalOpen(true)} variant="secondary" className="w-full sm:flex-1 sm:min-w-[150px] flex items-center justify-center gap-2 !bg-[#FF9F1C] !text-brand-black border-[3px]">
+                <Mail size={20} /> Email
+              </TactileButton>
+              <TactileButton onClick={handleEditToggle} variant="secondary" className="w-full sm:flex-1 sm:min-w-[150px] flex items-center justify-center gap-2 !bg-brand-yellow !text-brand-black border-[3px]">
                 <Edit2 size={20} /> {isEditing ? "Done" : "Edit"}
               </TactileButton>
-              <TactileButton onClick={(e) => handleSubmit(e)} variant="primary" className="flex-1 min-w-[150px] flex items-center justify-center gap-2 !bg-brand-purple !text-white border-[3px]">
+              <TactileButton onClick={(e) => handleSubmit(e)} variant="primary" className="w-full sm:flex-1 sm:min-w-[150px] flex items-center justify-center gap-2 !bg-brand-purple !text-white border-[3px]">
                 <RefreshCw size={20} className={loading ? "animate-spin" : ""} /> Regenerate
               </TactileButton>
             </div>

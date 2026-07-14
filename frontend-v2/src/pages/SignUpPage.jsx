@@ -34,7 +34,7 @@ export default function SignUpPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative z-10">
-      <Link to="/" className="absolute top-6 left-6 z-20">
+      <Link to="/" className="absolute top-6 left-6 z-20" aria-label="Go back">
         <TactileButton variant="secondary" className="px-4 py-2 flex items-center gap-2">
           <ArrowLeft size={20} /> Back
         </TactileButton>
