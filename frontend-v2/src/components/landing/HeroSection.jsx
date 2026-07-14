@@ -5,25 +5,25 @@ import { Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
+const sampleGreetings = [
+  "Happy Anniversary to my favorite person in the whole world! 🥂",
+  "Happy Birthday to the most amazing friend anyone could ask for! 🎉",
+  "Wishing you a birthday as bright and wonderful as you are! 🎂",
+  "Cheers to another year of laughter, love, and unforgettable memories! 🥳",
+  "Happy Anniversary here's to many more beautiful years together! 💍",
+  "Thank you for always being there, rain or shine. You mean the world! ☀️",
+  "Congratulations on this incredible milestone you truly earned it! 🏆",
+  "Sending warm wishes on this special day, filled with joy and love! 💛",
+  "Happy Festival! May your days be filled with light and happiness! ✨",
+  "Wishing you continued success and happiness in this new chapter! 🚀",
+  "Happy Birthday! May this year bring you closer to all your dreams! 🌟",
+  "Grateful to have you as a colleague and friend happy work anniversary! 🎊"
+];
+
 export default function HeroSection() {
   const [typedText, setTypedText] = useState("");
   const [greetingIndex, setGreetingIndex] = useState(0);
   const { currentUser } = useAuth();
-  
-  const sampleGreetings = [
-    "Happy Anniversary to my favorite person in the whole world! 🥂",
-    "Happy Birthday to the most amazing friend anyone could ask for! 🎉",
-    "Wishing you a birthday as bright and wonderful as you are! 🎂",
-    "Cheers to another year of laughter, love, and unforgettable memories! 🥳",
-    "Happy Anniversary here's to many more beautiful years together! 💍",
-    "Thank you for always being there, rain or shine. You mean the world! ☀️",
-    "Congratulations on this incredible milestone you truly earned it! 🏆",
-    "Sending warm wishes on this special day, filled with joy and love! 💛",
-    "Happy Festival! May your days be filled with light and happiness! ✨",
-    "Wishing you continued success and happiness in this new chapter! 🚀",
-    "Happy Birthday! May this year bring you closer to all your dreams! 🌟",
-    "Grateful to have you as a colleague and friend happy work anniversary! 🎊"
-  ];
   
   useEffect(() => {
     let index = 0;
